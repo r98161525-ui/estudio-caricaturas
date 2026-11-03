@@ -1,0 +1,766 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estudio de Caricaturas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Nunito:wght@400;600;800&display=swap">
+<style>
+/* Diseño: cielo estrellado de fondo (canvas); paneles de cristal oscuro encima. Izquierda = mesa de trabajo, derecha = lienzo, abajo = Mis Creaciones */
+:root {
+  --space: #070815;
+  --panel: rgba(20, 22, 48, .78);
+  --soft: rgba(255, 255, 255, .06);
+  --ink: #eef0ff;
+  --muted: #a8abd0;
+  --line: rgba(160, 170, 255, .22);
+  --accent: #ff7a45;
+  --accent-ink: #1b0b03;
+  --accent-2: #8b7bff;
+  --ok: #5fd39a;
+  --warn: #ffc857;
+  --font-title: "Bagel Fat One", "Arial Rounded MT Bold", system-ui, sans-serif;
+  --font-body: "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --r: 16px;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; }
+body {
+  background: var(--space); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.5;
+  background-image:
+    radial-gradient(60vw 40vw at 85% 10%, rgba(139, 123, 255, .22), transparent 60%),
+    radial-gradient(50vw 35vw at 5% 80%, rgba(255, 122, 69, .14), transparent 60%),
+    radial-gradient(40vw 30vw at 50% 50%, rgba(40, 120, 200, .10), transparent 70%);
+  background-attachment: fixed;
+}
+#stars { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+.wrap { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 28px 16px 56px; display: grid; gap: 24px; }
+header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: 16px; }
+header h1 { font-family: var(--font-title); font-weight: 400; font-size: clamp(2rem, 5vw, 3.2rem); margin: 0; line-height: 1.05; text-shadow: 0 0 24px rgba(139, 123, 255, .5); }
+header h1 span { color: var(--accent); }
+header p { margin: 6px 0 0; color: var(--muted); max-width: 60ch; }
+.quality { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; font-size: .9rem; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); cursor: pointer; color: var(--ink); font-family: inherit; }
+.quality i { width: 10px; height: 10px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 10px var(--warn); }
+.quality.high i { background: var(--ok); box-shadow: 0 0 10px var(--ok); }
+
+.panel, details.help, .settings { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); backdrop-filter: blur(8px); }
+.settings { padding: 18px 20px; display: grid; gap: 10px; }
+.settings h2 { margin: 0; font-size: 1.1rem; }
+.settings p { margin: 0; color: var(--muted); font-size: .92rem; }
+.settings ol { margin: 0; padding-left: 20px; color: var(--muted); font-size: .92rem; display: grid; gap: 2px; }
+.settings a { color: var(--accent-2); font-weight: 800; }
+.key-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.providers { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+.prov { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: rgba(0, 0, 0, .25); }
+.badge { justify-self: start; font-size: .75rem; font-weight: 800; color: var(--warn); }
+code { font-family: ui-monospace, Consolas, monospace; background: rgba(255, 255, 255, .08); padding: 0 4px; border-radius: 4px; }
+.saved-keys { display: grid; gap: 6px; }
+.saved { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.saved.active { border-color: var(--ok); box-shadow: 0 0 12px rgba(95, 211, 154, .25); }
+.saved .name { font-weight: 800; flex: 1 1 160px; }
+.saved .btn { padding: 6px 12px; font-size: .85rem; }
+.key-row input { flex: 1 1 260px; }
+
+.main { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 24px; align-items: start; }
+@media (max-width: 860px) { .main { grid-template-columns: 1fr; } }
+.panel { padding: 20px; display: grid; gap: 18px; min-width: 0; }
+.step { display: grid; gap: 8px; }
+.step > label, .step > .lbl { font-weight: 800; font-size: .95rem; display: flex; gap: 8px; align-items: center; }
+.num { display: inline-grid; place-items: center; width: 1.6rem; height: 1.6rem; border-radius: 50%; background: var(--accent-2); color: #fff; font-size: .8rem; }
+textarea, input[type="text"], input[type="password"] {
+  font: inherit; color: var(--ink); background: rgba(0, 0, 0, .35); border: 2px solid var(--line); border-radius: 10px; padding: 12px; width: 100%;
+}
+textarea { min-height: 120px; resize: vertical; font-size: 1.05rem; }
+textarea::placeholder, input::placeholder { color: #7d80a8; }
+textarea:focus, input:focus { outline: none; border-color: var(--accent-2); }
+.hint { font-size: .85rem; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  font: inherit; font-size: .9rem; font-weight: 600; cursor: pointer;
+  border: 2px solid var(--line); background: rgba(255, 255, 255, .03); color: var(--ink); border-radius: 999px; padding: 5px 12px;
+}
+.chip:hover { border-color: var(--accent-2); }
+.chip[aria-pressed="true"] { background: var(--accent-2); border-color: var(--accent-2); color: #fff; box-shadow: 0 0 14px rgba(139, 123, 255, .5); }
+.buttons { display: flex; flex-wrap: wrap; gap: 10px; }
+.btn {
+  font: inherit; font-weight: 800; cursor: pointer; border-radius: 12px; padding: 12px 18px; font-size: 1rem;
+  border: 2px solid var(--line); background: rgba(255, 255, 255, .05); color: var(--ink); text-decoration: none; display: inline-block;
+}
+.btn:hover { border-color: var(--accent-2); }
+.btn.big { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-size: 1.1rem; flex: 1 1 200px; box-shadow: 0 0 22px rgba(255, 122, 69, .35); }
+.btn:disabled { opacity: .55; cursor: wait; }
+.btn:focus-visible, .chip:focus-visible, .quality:focus-visible { outline: 3px solid var(--accent-2); outline-offset: 2px; }
+
+.stage { display: grid; gap: 14px; min-width: 0; }
+.canvas {
+  background: rgba(0, 0, 0, .35); border: 1px solid var(--line); border-radius: var(--r); min-height: 320px; display: grid; place-items: center; overflow: hidden;
+}
+.canvas img { width: 100%; height: auto; display: block; }
+.canvas .msg { padding: 24px; text-align: center; color: var(--muted); max-width: 42ch; }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; width: 100%; padding: 6px; }
+.grid3 img { border-radius: 8px; cursor: pointer; }
+.spinner { width: 46px; height: 46px; border-radius: 50%; border: 5px solid var(--line); border-top-color: var(--accent); margin: 0 auto 10px; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.result-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.result-actions .btn { padding: 8px 14px; font-size: .9rem; }
+.prompt-box { font-size: .85rem; color: var(--muted); background: rgba(0, 0, 0, .3); border-radius: 10px; padding: 10px 12px; overflow-wrap: anywhere; }
+
+.video { border: 2px dashed var(--line); border-radius: var(--r); padding: 16px; display: grid; gap: 10px; background: rgba(7, 8, 21, .5); }
+.video h3 { margin: 0; font-size: 1.05rem; }
+.video ol { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
+.links { display: flex; flex-wrap: wrap; gap: 8px; }
+.links a { font-weight: 800; color: var(--accent-2); text-decoration: none; border: 2px solid var(--accent-2); border-radius: 999px; padding: 4px 12px; font-size: .9rem; }
+.links a:hover { background: var(--accent-2); color: #fff; }
+
+details.help { padding: 16px 20px; }
+details.help summary { font-weight: 800; cursor: pointer; font-size: 1.05rem; }
+.help-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-top: 12px; }
+.help-grid h4 { margin: 0 0 4px; color: var(--accent); }
+.help-grid p { margin: 0 0 6px; }
+.help-grid ul { margin: 0; padding-left: 18px; }
+.example { cursor: pointer; color: #c4bbff; text-decoration: underline; text-underline-offset: 3px; }
+
+.history h2 { font-family: var(--font-title); font-weight: 400; margin: 0 0 12px; font-size: 1.7rem; }
+.hist-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.hist-item { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; cursor: pointer; display: grid; text-align: left; padding: 0; font: inherit; color: inherit; }
+.hist-item:hover { border-color: var(--accent-2); }
+.hist-item img { width: 100%; aspect-ratio: 1; object-fit: cover; background: rgba(0, 0, 0, .3); }
+.hist-item span { padding: 8px 10px; font-size: .8rem; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.hist-empty { color: var(--muted); margin: 0; }
+.toast { position: fixed; z-index: 5; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--ink); color: var(--space); padding: 10px 18px; border-radius: 999px; font-weight: 700; max-width: calc(100vw - 32px); }
+[hidden] { display: none !important; }
+@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+</style>
+</head>
+<body>
+<canvas id="stars" aria-hidden="true"></canvas>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Estudio de <span>Caricaturas</span></h1>
+      <p>Describe un personaje, elige un estilo y una textura, y la imagen aparece aquí en unos segundos.</p>
+    </div>
+    <button type="button" class="quality" id="qualityBtn"><i></i><span id="qualityText">Calidad básica</span></button>
+  </header>
+
+  <section class="settings" id="settings">
+    <h2>Ajustes · Alta calidad, sin marca de agua</h2>
+    <p id="keyStatus" class="hint"></p>
+    <p>Sin cuenta, el servicio gratis pone una marca de agua y usa un modelo sencillo. Con una cuenta gratuita de Pollinations tienes imágenes nítidas, más grandes y sin marca de agua.</p>
+    <p>Pega una llave de cualquiera de estos servicios. La página reconoce sola de cuál es:</p>
+    <div class="providers">
+      <div class="prov"><strong>Pollinations</strong> <span class="badge">gratis con cuenta</span>
+        <span class="hint">Empieza por <code>sk_</code> · <a href="https://enter.pollinations.ai/keys" target="_blank" rel="noopener">conseguir llave</a></span></div>
+      <div class="prov"><strong>Google Gemini</strong> <span class="badge">uso gratis limitado</span>
+        <span class="hint">Empieza por <code>AIza</code> · <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">conseguir llave</a></span></div>
+      <div class="prov"><strong>Hugging Face</strong> <span class="badge">pocos créditos gratis al mes</span>
+        <span class="hint">Empieza por <code>hf_</code> · <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener">conseguir llave</a></span></div>
+      <div class="prov"><strong>NVIDIA</strong> <span class="badge">créditos gratis al registrarte</span>
+        <span class="hint">Empieza por <code>nvapi-</code> · <a href="https://build.nvidia.com/settings/api-keys" target="_blank" rel="noopener">conseguir llave</a></span>
+        <span class="hint">Solo funciona si abres el Estudio con <strong>Iniciar Estudio.bat</strong>.</span></div>
+    </div>
+    <div class="key-row">
+      <input type="password" id="keyInput" placeholder="Pega aquí tu llave (sk_…, AIza… o hf_…)" autocomplete="off">
+      <button type="button" class="btn" id="keySave">Guardar llave</button>
+    </div>
+    <div class="saved-keys" id="savedKeys"></div>
+    <p class="hint">Las llaves se guardan solo en este navegador. No las compartas con nadie. Si un servicio te pide tarjeta para seguir, no la pongas sin pensarlo: sigue con otro servicio o con la calidad básica.</p>
+  </section>
+
+  <div class="main">
+    <section class="panel" aria-label="Crear caricatura">
+      <div class="step">
+        <label for="desc"><span class="num">1</span> ¿Qué quieres ver?</label>
+        <textarea id="desc" placeholder="Ej. un perro con gafas de sol tocando la guitarra en la playa"></textarea>
+        <span class="hint">Di quién es, qué hace y dónde está. Puedes escribir en español.</span>
+      </div>
+
+      <div class="step">
+        <span class="lbl"><span class="num">2</span> Estilo</span>
+        <div class="chips" id="styles" role="group" aria-label="Estilo"></div>
+      </div>
+
+      <div class="step">
+        <span class="lbl"><span class="num">3</span> Textura</span>
+        <div class="chips" id="textures" role="group" aria-label="Textura"></div>
+        <input type="text" id="customTexture" placeholder="O escribe otra textura: gelatina, papel arrugado, nubes…">
+      </div>
+
+      <div class="step">
+        <span class="lbl"><span class="num">4</span> Tamaño</span>
+        <div class="chips" id="sizes" role="group" aria-label="Tamaño"></div>
+      </div>
+
+      <div class="buttons">
+        <button type="button" class="btn big" id="genBtn">Crear imagen</button>
+        <button type="button" class="btn" id="gen3Btn">Crear 3 versiones</button>
+      </div>
+    </section>
+
+    <section class="stage" aria-label="Resultado">
+      <div class="canvas" id="canvas">
+        <div class="msg">Tu caricatura aparecerá aquí. Prueba con uno de los ejemplos de abajo si no sabes por dónde empezar.</div>
+      </div>
+      <div class="result-actions" id="resultActions" hidden>
+        <button type="button" class="btn" id="saveBtn">Descargar imagen</button>
+        <a class="btn" id="openBtn" href="#" target="_blank" rel="noopener">Abrir en grande</a>
+        <button type="button" class="btn" id="againBtn">Otra versión</button>
+      </div>
+      <div class="prompt-box" id="promptBox" hidden></div>
+
+      <div class="video">
+        <h3>¿Lo quieres en vídeo?</h3>
+        <ol>
+          <li>Pulsa <strong>Copiar descripción para vídeo</strong>.</li>
+          <li>Abre una de las herramientas de abajo (tienen plan gratuito, piden cuenta).</li>
+          <li>Pega la descripción. Si quieres que se parezca a tu imagen, descárgala y súbela allí también.</li>
+        </ol>
+        <div class="buttons"><button type="button" class="btn" id="copyVideoBtn">Copiar descripción para vídeo</button></div>
+        <div class="links">
+          <a href="https://lumalabs.ai/dream-machine" target="_blank" rel="noopener">Luma Dream Machine</a>
+          <a href="https://klingai.com" target="_blank" rel="noopener">Kling</a>
+          <a href="https://pika.art" target="_blank" rel="noopener">Pika</a>
+        </div>
+        <span class="hint">Un vídeo tarda entre 1 y 3 minutos en esas webs.</span>
+      </div>
+    </section>
+  </div>
+
+  <details class="help" open>
+    <summary>Cómo pedir una buena caricatura</summary>
+    <div class="help-grid">
+      <div>
+        <h4>La fórmula</h4>
+        <p><strong>Quién</strong> + <strong>qué hace</strong> + <strong>dónde</strong>. La textura y el estilo los eliges con los botones.</p>
+        <p class="hint">Ej. "un gato astronauta saludando desde la luna"</p>
+      </div>
+      <div>
+        <h4>Ideas de texturas</h4>
+        <ul>
+          <li>Materiales: madera, metal, piedra, cristal</li>
+          <li>Blandas: peluche, lana, algodón, gelatina</li>
+          <li>Comida: chocolate, galleta, sandía, pan</li>
+          <li>Raras: nubes, lava, papel arrugado, hielo</li>
+        </ul>
+      </div>
+      <div>
+        <h4>Ejemplos para probar (haz clic)</h4>
+        <ul id="examples"></ul>
+      </div>
+      <div>
+        <h4>Trucos</h4>
+        <ul>
+          <li>Para miniaturas de YouTube usa <strong>Horizontal</strong>; para Shorts, <strong>Vertical</strong>.</li>
+          <li>Si no te gusta, pulsa <strong>Otra versión</strong>: cada vez sale distinta.</li>
+          <li>Pocos detalles funcionan mejor que muchos.</li>
+        </ul>
+      </div>
+    </div>
+  </details>
+
+  <section class="history">
+    <h2>Mis Creaciones</h2>
+    <div class="hist-grid" id="history"></div>
+  </section>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+// ---------- Fondo de estrellas ----------
+(function stars() {
+  const c = document.getElementById("stars"), ctx = c.getContext("2d");
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let pts = [];
+  function resize() {
+    c.width = innerWidth * devicePixelRatio; c.height = innerHeight * devicePixelRatio;
+    const n = Math.round(innerWidth * innerHeight / 2600);
+    pts = Array.from({ length: n }, () => ({
+      x: Math.random() * c.width, y: Math.random() * c.height,
+      r: (Math.random() * 1.3 + .3) * devicePixelRatio, p: Math.random() * Math.PI * 2, s: Math.random() * .02 + .005,
+      hue: Math.random() < .15 ? (Math.random() < .5 ? 25 : 250) : 0,
+    }));
+  }
+  function draw() {
+    ctx.clearRect(0, 0, c.width, c.height);
+    for (const s of pts) {
+      s.p += still ? 0 : s.s;
+      const a = .45 + .55 * Math.abs(Math.sin(s.p));
+      ctx.fillStyle = s.hue ? `hsla(${s.hue},90%,75%,${a})` : `rgba(255,255,255,${a})`;
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
+    }
+    if (!still) requestAnimationFrame(draw);
+  }
+  addEventListener("resize", () => { resize(); if (still) draw(); });
+  resize(); draw();
+})();
+
+// ---------- Opciones ----------
+const STYLES = [
+  { id: "3d", name: "Animación 3D", en: "3D animated cartoon character, Pixar-like style, soft cinematic lighting, cute proportions" },
+  { id: "comic", name: "Cómic", en: "comic book cartoon, bold black outlines, flat vibrant colors, hand-drawn" },
+  { id: "plastilina", name: "Plastilina", en: "claymation figure, stop-motion clay style, handmade look" },
+  { id: "anime", name: "Anime", en: "anime style cartoon, cel shading, expressive eyes" },
+  { id: "juguete", name: "Juguete", en: "vinyl toy figure, collectible toy, studio product photo" },
+  { id: "acuarela", name: "Acuarela", en: "watercolor cartoon illustration, soft paint texture, paper grain" },
+  { id: "pixel", name: "Pixel art", en: "pixel art cartoon, retro 16-bit video game style" },
+  { id: "caricatura", name: "Caricatura clásica", en: "classic exaggerated caricature, big head, small body, funny expression" },
+];
+const TEXTURES = [
+  { id: "ninguna", name: "Sin textura", en: "" },
+  { id: "madera", name: "Madera", en: "made entirely of carved wood, visible wood grain" },
+  { id: "plastilina", name: "Plastilina", en: "made of colorful modeling clay with fingerprints" },
+  { id: "peluche", name: "Peluche", en: "made of soft fluffy plush fabric with stitches" },
+  { id: "metal", name: "Metal", en: "made of shiny polished chrome metal" },
+  { id: "cristal", name: "Cristal", en: "made of transparent glass, refractions and reflections" },
+  { id: "piedra", name: "Piedra", en: "carved from stone, rough rocky surface" },
+  { id: "lana", name: "Lana tejida", en: "knitted from wool yarn, crochet texture" },
+  { id: "chocolate", name: "Chocolate", en: "made of glossy melted chocolate" },
+  { id: "papel", name: "Papel", en: "made of folded and cut paper, papercraft" },
+  { id: "hielo", name: "Hielo", en: "made of frozen ice, frosty translucent" },
+  { id: "lava", name: "Lava", en: "made of glowing molten lava" },
+];
+// Sin llave el servicio limita a 1024 px; con llave pedimos más resolución.
+const SIZES = [
+  { id: "h", name: "Horizontal (miniatura)", free: [1024, 576], hq: [1920, 1080] },
+  { id: "v", name: "Vertical (Shorts)", free: [576, 1024], hq: [1080, 1920] },
+  { id: "c", name: "Cuadrado", free: [1024, 1024], hq: [1536, 1536] },
+];
+const EXAMPLES = [
+  { d: "un perro feliz con sombrero de vaquero", s: "3d", t: "madera" },
+  { d: "un dragón pequeño comiendo una pizza", s: "plastilina", t: "plastilina" },
+  { d: "un búho profesor con gafas leyendo un libro", s: "comic", t: "peluche" },
+  { d: "un robot cocinero en una cocina", s: "anime", t: "metal" },
+  { d: "un elefante bailando bajo la lluvia", s: "juguete", t: "cristal" },
+];
+const HQ_MODEL = "zimage";
+const MAX_HISTORY = 10;
+
+let style = "3d", texture = "ninguna", size = "h";
+let current = null; // { id, desc, prompt, src, blob? }
+
+const $ = (id) => document.getElementById(id);
+
+// ---------- Llaves ----------
+const PROVIDERS = {
+  pollinations: { name: "Pollinations", test: (k) => k.startsWith("sk_") },
+  google: { name: "Google Gemini", test: (k) => k.startsWith("AIza") },
+  hf: { name: "Hugging Face", test: (k) => k.startsWith("hf_") },
+  nvidia: { name: "NVIDIA", test: (k) => k.startsWith("nvapi-") },
+};
+// NVIDIA necesita el servidor local (Iniciar Estudio.bat), que abre la página en localhost.
+const viaServer = location.hostname === "localhost";
+function readKeys() {
+  let keys = {};
+  try { keys = JSON.parse(localStorage.getItem("caricaturas-llaves") || "{}"); } catch (e) {}
+  try { // llave de la versión anterior
+    const old = localStorage.getItem("caricaturas-llave");
+    if (old) { keys.pollinations = old; localStorage.removeItem("caricaturas-llave"); writeKeys(keys); if (!getActiveName()) setActive("pollinations"); }
+  } catch (e) {}
+  return keys;
+}
+function writeKeys(keys) { try { localStorage.setItem("caricaturas-llaves", JSON.stringify(keys)); } catch (e) {} }
+function getActiveName() { try { return localStorage.getItem("caricaturas-servicio") || ""; } catch (e) { return ""; } }
+function setActive(p) { try { if (p) localStorage.setItem("caricaturas-servicio", p); else localStorage.removeItem("caricaturas-servicio"); } catch (e) {} }
+// Devuelve { provider, key } del servicio en uso, o null si estás en calidad básica.
+function getActive() {
+  const keys = readKeys(), p = getActiveName();
+  return p && keys[p] ? { provider: p, key: keys[p] } : null;
+}
+function refreshQuality() {
+  const act = getActive();
+  $("qualityBtn").classList.toggle("high", !!act);
+  $("qualityText").textContent = act ? "Alta calidad · " + PROVIDERS[act.provider].name : "Calidad básica · mejorar";
+  $("keyStatus").textContent = act
+    ? "✅ Estás usando " + PROVIDERS[act.provider].name + ". Puedes guardar más llaves y elegir cuál usar."
+    : "Ahora estás en calidad básica (con marca de agua). Pega una llave para mejorarla:";
+  const keys = readKeys(), box = $("savedKeys");
+  box.replaceChildren();
+  Object.keys(PROVIDERS).filter((p) => keys[p]).forEach((p) => {
+    const row = document.createElement("div");
+    row.className = "saved" + (act && act.provider === p ? " active" : "");
+    const name = document.createElement("span"); name.className = "name";
+    name.textContent = PROVIDERS[p].name + " · …" + keys[p].slice(-4);
+    const use = document.createElement("button"); use.type = "button"; use.className = "btn";
+    const isOn = act && act.provider === p;
+    use.textContent = isOn ? "En uso" : "Usar esta"; use.disabled = isOn;
+    use.addEventListener("click", () => { setActive(p); refreshQuality(); toast("Ahora usas " + PROVIDERS[p].name); });
+    const del = document.createElement("button"); del.type = "button"; del.className = "btn"; del.textContent = "Quitar";
+    del.addEventListener("click", () => {
+      const k = readKeys(); delete k[p]; writeKeys(k);
+      if (getActiveName() === p) setActive(Object.keys(PROVIDERS).find((x) => k[x]) || "");
+      refreshQuality(); toast("Llave de " + PROVIDERS[p].name + " quitada");
+    });
+    row.append(name, use, del); box.append(row);
+  });
+  if (act) {
+    const basic = document.createElement("button"); basic.type = "button"; basic.className = "btn";
+    basic.textContent = "Usar calidad básica (sin llave)";
+    basic.style.justifySelf = "start";
+    basic.addEventListener("click", () => { setActive(""); refreshQuality(); toast("Vuelves a calidad básica"); });
+    box.append(basic);
+  }
+}
+$("qualityBtn").addEventListener("click", () => {
+  $("settings").scrollIntoView({ behavior: "smooth", block: "center" });
+  $("keyInput").focus();
+});
+$("keySave").addEventListener("click", () => {
+  const k = $("keyInput").value.trim();
+  const p = Object.keys(PROVIDERS).find((x) => PROVIDERS[x].test(k));
+  if (!p) { toast("No reconozco esa llave. Debe empezar por sk_, AIza, hf_ o nvapi-. Revisa que la copiaste entera."); return; }
+  if (p === "nvidia" && !viaServer) toast("Guardada. Para usar NVIDIA, cierra esta página y ábrela con Iniciar Estudio.bat (tendrás que pegar la llave allí otra vez).");
+  const keys = readKeys(); keys[p] = k; writeKeys(keys); setActive(p);
+  $("keyInput").value = ""; refreshQuality();
+  if (p !== "nvidia" || viaServer) toast("Llave de " + PROVIDERS[p].name + " guardada y en uso.");
+});
+refreshQuality();
+
+// ---------- Botones de elección ----------
+function makeChips(container, items, getValue, setValue) {
+  items.forEach((it) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "chip"; b.textContent = it.name; b.dataset.id = it.id;
+    b.addEventListener("click", () => { setValue(it.id); refreshChips(container, getValue()); });
+    container.append(b);
+  });
+  refreshChips(container, getValue());
+}
+function refreshChips(container, value) {
+  container.querySelectorAll(".chip").forEach((c) => c.setAttribute("aria-pressed", String(c.dataset.id === value)));
+}
+makeChips($("styles"), STYLES, () => style, (v) => { style = v; });
+makeChips($("textures"), TEXTURES, () => texture, (v) => { texture = v; $("customTexture").value = ""; });
+makeChips($("sizes"), SIZES, () => size, (v) => { size = v; });
+$("customTexture").addEventListener("input", () => {
+  if ($("customTexture").value.trim()) { texture = ""; refreshChips($("textures"), ""); }
+});
+
+EXAMPLES.forEach((ex) => {
+  const li = document.createElement("li");
+  const s = document.createElement("span");
+  s.className = "example"; s.tabIndex = 0; s.setAttribute("role", "button");
+  s.textContent = ex.d + " (" + TEXTURES.find((t) => t.id === ex.t).name.toLowerCase() + ")";
+  const use = () => {
+    $("desc").value = ex.d; style = ex.s; texture = ex.t; $("customTexture").value = "";
+    refreshChips($("styles"), style); refreshChips($("textures"), texture);
+    $("desc").scrollIntoView({ behavior: "smooth", block: "center" });
+    toast("Ejemplo cargado. Pulsa Crear imagen.");
+  };
+  s.addEventListener("click", use);
+  s.addEventListener("keydown", (e) => { if (e.key === "Enter") use(); });
+  li.append(s); $("examples").append(li);
+});
+
+// ---------- Generar ----------
+function buildPrompt(desc) {
+  const st = STYLES.find((s) => s.id === style);
+  const custom = $("customTexture").value.trim();
+  const tx = custom ? "made of " + custom + " texture" : (TEXTURES.find((t) => t.id === texture) || {}).en;
+  return [desc, st.en, tx, "funny cartoon, vibrant colors, highly detailed, sharp focus, clean background"].filter(Boolean).join(", ");
+}
+function newSeed() { return Math.floor(Math.random() * 1e9); }
+
+function withTimeout(ms) { const c = new AbortController(); setTimeout(() => c.abort(), ms); return c.signal; }
+
+async function checkStatus(res) {
+  if (res.ok) return;
+  let detail = "";
+  try { detail = (await res.text()).slice(0, 200); } catch (e) {}
+  const kind = (res.status === 401 || res.status === 403 || res.status === 400) ? "llave"
+    : (res.status === 402 || res.status === 429) ? "saldo" : "servicio";
+  const err = new Error(kind);
+  err.detail = "código " + res.status + (detail ? ": " + detail : "");
+  throw err;
+}
+// Recorta una imagen cuadrada al centro para que tenga la forma elegida (horizontal o vertical).
+async function cropTo(blob, ratio) {
+  if (ratio === 1) return blob;
+  const bmp = await createImageBitmap(blob);
+  const w = ratio > 1 ? bmp.width : Math.round(bmp.height * ratio);
+  const h = ratio > 1 ? Math.round(bmp.width / ratio) : bmp.height;
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  c.getContext("2d").drawImage(bmp, (bmp.width - w) / 2, (bmp.height - h) / 2, w, h, 0, 0, w, h);
+  return new Promise((resolve) => c.toBlob(resolve, "image/jpeg", 0.95));
+}
+function fromBlob(blob) { return { src: URL.createObjectURL(blob), blob }; }
+function fromBase64(b64, mime) {
+  const bin = atob(b64), bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return fromBlob(new Blob([bytes], { type: mime || "image/png" }));
+}
+
+// Google: busca el modelo de imagen más nuevo que tenga tu llave (una vez por visita).
+let googleModel = null;
+async function pickGoogleModel(key) {
+  if (googleModel) return googleModel;
+  const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200", { headers: { "x-goog-api-key": key } });
+  await checkStatus(res);
+  const list = (await res.json()).models || [];
+  const ok = list.filter((m) => /image/i.test(m.name) && !/imagen/i.test(m.name) &&
+    (m.supportedGenerationMethods || []).includes("generateContent"));
+  ok.sort((a, b) => b.name.localeCompare(a.name, undefined, { numeric: true }));
+  googleModel = ok.length ? ok[0].name : "models/gemini-2.5-flash-image";
+  return googleModel;
+}
+
+const SERVICES = {
+  async pollinations(prompt, sz, key, seed) {
+    const [w, h] = sz.hq;
+    const url = "https://gen.pollinations.ai/image/" + encodeURIComponent(prompt) +
+      "?model=" + HQ_MODEL + "&width=" + w + "&height=" + h + "&seed=" + seed + "&nologo=true";
+    const res = await fetch(url, { headers: { Authorization: "Bearer " + key }, signal: withTimeout(90000) });
+    await checkStatus(res);
+    return fromBlob(await res.blob());
+  },
+  async google(prompt, sz, key) {
+    const model = await pickGoogleModel(key);
+    const ratio = { h: "16:9", v: "9:16", c: "1:1" }[sz.id];
+    const res = await fetch("https://generativelanguage.googleapis.com/v1beta/" + model + ":generateContent", {
+      method: "POST", signal: withTimeout(120000),
+      headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: "Create an image: " + prompt }] }],
+        generationConfig: { responseModalities: ["IMAGE", "TEXT"], imageConfig: { aspectRatio: ratio } },
+      }),
+    });
+    await checkStatus(res);
+    const data = await res.json();
+    const parts = ((data.candidates || [])[0] || {}).content?.parts || [];
+    const img = parts.find((p) => p.inlineData || p.inline_data);
+    if (!img) throw new Error("servicio");
+    const d = img.inlineData || img.inline_data;
+    return fromBase64(d.data, d.mimeType || d.mime_type);
+  },
+  async hf(prompt, sz, key, seed) {
+    const [w, h] = sz.free;
+    const res = await fetch("https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell", {
+      method: "POST", signal: withTimeout(120000),
+      headers: { Authorization: "Bearer " + key, "Content-Type": "application/json", Accept: "image/png" },
+      body: JSON.stringify({ inputs: prompt, parameters: { width: w, height: h, seed } }),
+    });
+    await checkStatus(res);
+    return fromBlob(await res.blob());
+  },
+  async nvidia(prompt, sz, key, seed) {
+    if (!viaServer) throw new Error("local");
+    // Este modelo de NVIDIA solo dibuja cuadrados de 1024; luego recortamos a la forma elegida.
+    const res = await fetch("/nvidia/black-forest-labs/flux.1-schnell", {
+      method: "POST", signal: withTimeout(120000),
+      headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: prompt + ", centered composition", width: 1024, height: 1024, seed: seed % 4294967295, steps: 4 }),
+    });
+    await checkStatus(res);
+    const art = ((await res.json()).artifacts || [])[0];
+    if (!art || !art.base64) throw new Error("servicio");
+    if (art.finishReason === "CONTENT_FILTERED") { const e = new Error("filtro"); throw e; }
+    const square = fromBase64(art.base64, "image/jpeg").blob;
+    const ratio = { h: 16 / 9, v: 9 / 16, c: 1 }[sz.id];
+    return fromBlob(await cropTo(square, ratio));
+  },
+};
+
+// Devuelve { src, blob? }. Con llave: el servicio elegido; sin llave: servicio gratuito básico.
+async function makeImage(prompt) {
+  const sz = SIZES.find((s) => s.id === size);
+  const act = getActive();
+  const seed = newSeed();
+  if (act) return SERVICES[act.provider](prompt, sz, act.key, seed);
+  const [w, h] = sz.free;
+  const url = "https://image.pollinations.ai/prompt/" + encodeURIComponent(prompt) +
+    "?width=" + w + "&height=" + h + "&seed=" + seed + "&nologo=true";
+  await new Promise((resolve, reject) => {
+    const img = new Image();
+    const t = setTimeout(() => reject(new Error("servicio")), 90000);
+    img.onload = () => { clearTimeout(t); resolve(); };
+    img.onerror = () => { clearTimeout(t); reject(new Error("servicio")); };
+    img.src = url;
+  });
+  return { src: url };
+}
+
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.hidden = false;
+  clearTimeout(toast._t); toast._t = setTimeout(() => { t.hidden = true; }, 3200);
+}
+function setBusy(b) { $("genBtn").disabled = b; $("gen3Btn").disabled = b; $("againBtn").disabled = b; }
+function showLoading(text) {
+  $("canvas").innerHTML = '<div class="msg"><div class="spinner"></div>' + text + "</div>";
+  $("resultActions").hidden = true;
+}
+function showError(err) {
+  const why = {
+    llave: "El servicio rechazó tu llave. En Ajustes, quítala y pega una nueva, o elige otro servicio.",
+    filtro: "El servicio no quiso dibujar esa descripción (su filtro de contenido la bloqueó). Prueba a describirlo de otra forma.",
+    local: "Las llaves de NVIDIA solo funcionan si abres el Estudio con «Iniciar Estudio.bat» (está en la misma carpeta). En Ajustes puedes elegir otro servicio mientras tanto.",
+    saldo: "Se acabó tu uso gratuito en este servicio por ahora. En Ajustes, elige otro servicio o la calidad básica, o espera a que se recargue.",
+  }[err && err.message] || "No se pudo crear la imagen. Revisa tu conexión a internet y vuelve a pulsar el botón. Si sigue fallando, el servicio puede estar saturado: espera un minuto.";
+  $("canvas").innerHTML = '<div class="msg"></div>';
+  $("canvas").firstChild.textContent = why;
+  if (err && err.detail) {
+    const d = document.createElement("div");
+    d.className = "hint"; d.style.marginTop = "10px"; d.style.overflowWrap = "anywhere";
+    d.textContent = "Detalle técnico (cópialo si me lo quieres enseñar): " + err.detail;
+    $("canvas").firstChild.append(d);
+  }
+}
+function showResult(item) {
+  current = item;
+  const img = document.createElement("img");
+  img.src = item.src; img.alt = item.desc;
+  $("canvas").replaceChildren(img);
+  $("resultActions").hidden = false;
+  $("openBtn").href = item.src;
+  $("promptBox").hidden = false;
+  $("promptBox").textContent = "Descripción enviada: " + item.prompt;
+}
+function getDesc() {
+  const d = $("desc").value.trim();
+  if (!d) { $("desc").focus(); toast("Primero escribe qué quieres ver."); return null; }
+  return d;
+}
+const waitText = () => getActive() ? "Dibujando en alta calidad con " + PROVIDERS[getActive().provider].name + "… suele tardar entre 3 y 30 segundos." : "Dibujando tu caricatura… suele tardar entre 5 y 20 segundos.";
+
+async function generate(desc) {
+  const prompt = buildPrompt(desc);
+  setBusy(true); showLoading(waitText());
+  try {
+    const r = await makeImage(prompt);
+    const item = { id: Date.now() + "-" + newSeed(), desc, prompt, src: r.src, blob: r.blob, at: Date.now() };
+    showResult(item); await addHistory(item);
+  } catch (e) { showError(e); }
+  finally { setBusy(false); }
+}
+
+async function generate3(desc) {
+  const prompt = buildPrompt(desc);
+  setBusy(true); showLoading("Dibujando 3 versiones a la vez… puede tardar hasta un minuto.");
+  const results = await Promise.allSettled([0, 1, 2].map(() => makeImage(prompt)));
+  setBusy(false);
+  const ok = results.filter((r) => r.status === "fulfilled").map((r) => r.value);
+  if (!ok.length) { showError(results[0].reason); return; }
+  const grid = document.createElement("div"); grid.className = "grid3";
+  for (const r of ok) {
+    const item = { id: Date.now() + "-" + newSeed(), desc, prompt, src: r.src, blob: r.blob, at: Date.now() };
+    await addHistory(item);
+    const img = document.createElement("img"); img.src = r.src; img.alt = desc; img.title = "Clic para verla en grande";
+    img.addEventListener("click", () => showResult(item));
+    grid.append(img);
+  }
+  $("canvas").replaceChildren(grid);
+  current = null;
+  $("resultActions").hidden = true;
+  $("promptBox").hidden = false;
+  $("promptBox").textContent = "Haz clic en la que más te guste para verla en grande y descargarla.";
+}
+
+$("genBtn").addEventListener("click", () => { const d = getDesc(); if (d) generate(d); });
+$("gen3Btn").addEventListener("click", () => { const d = getDesc(); if (d) generate3(d); });
+$("againBtn").addEventListener("click", () => { const d = getDesc() || (current && current.desc); if (d) generate(d); });
+$("desc").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) $("genBtn").click(); });
+
+$("saveBtn").addEventListener("click", async () => {
+  if (!current) return;
+  try {
+    const blob = current.blob || await (await fetch(current.src)).blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "caricatura-" + new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-") + ".jpg";
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    toast("Imagen descargada en tu carpeta de Descargas");
+  } catch (e) {
+    window.open(current.src, "_blank");
+    toast("Se abrió en otra pestaña: clic derecho → Guardar imagen como…");
+  }
+});
+
+$("copyVideoBtn").addEventListener("click", async () => {
+  const d = $("desc").value.trim() || (current && current.desc);
+  if (!d) { $("desc").focus(); toast("Primero escribe qué quieres ver."); return; }
+  const text = buildPrompt(d) + ", animated cartoon video, smooth playful motion, camera slowly moves around the character, 5 seconds";
+  try { await navigator.clipboard.writeText(text); toast("Copiado. Ahora pégalo en la web de vídeo (Ctrl + V)."); }
+  catch (e) {
+    $("promptBox").hidden = false; $("promptBox").textContent = text;
+    toast("Copia el texto del recuadro gris a mano.");
+  }
+});
+
+// ---------- Mis Creaciones (guardadas en el navegador con IndexedDB) ----------
+let dbPromise = null;
+function openDB() {
+  if (!dbPromise) dbPromise = new Promise((resolve) => {
+    try {
+      const req = indexedDB.open("estudio-caricaturas", 1);
+      req.onupgradeneeded = () => req.result.createObjectStore("creaciones", { keyPath: "id" });
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    } catch (e) { resolve(null); }
+  });
+  return dbPromise;
+}
+async function readHistory() {
+  const db = await openDB();
+  if (!db) return [];
+  return new Promise((resolve) => {
+    const req = db.transaction("creaciones").objectStore("creaciones").getAll();
+    req.onsuccess = () => resolve(req.result.sort((a, b) => b.at - a.at));
+    req.onerror = () => resolve([]);
+  });
+}
+async function addHistory(item) {
+  const db = await openDB();
+  if (!db) return;
+  const saved = { id: item.id, desc: item.desc, prompt: item.prompt, at: item.at };
+  if (item.blob) saved.blob = item.blob; else saved.url = item.src;
+  await new Promise((resolve) => {
+    const tx = db.transaction("creaciones", "readwrite");
+    tx.objectStore("creaciones").put(saved);
+    tx.oncomplete = tx.onerror = resolve;
+  });
+  const all = await readHistory();
+  if (all.length > MAX_HISTORY) {
+    await new Promise((resolve) => {
+      const tx = db.transaction("creaciones", "readwrite");
+      all.slice(MAX_HISTORY).forEach((x) => tx.objectStore("creaciones").delete(x.id));
+      tx.oncomplete = tx.onerror = resolve;
+    });
+  }
+  renderHistory();
+}
+async function migrateOld() {
+  let old = [];
+  try { old = JSON.parse(localStorage.getItem("caricaturas-historial") || "[]"); } catch (e) {}
+  for (const o of old.reverse()) await addHistory({ id: "old-" + o.at, desc: o.desc, prompt: o.prompt, src: o.url, at: o.at || Date.now() });
+  try { localStorage.removeItem("caricaturas-historial"); } catch (e) {}
+}
+const shownUrls = [];
+async function renderHistory() {
+  const h = await readHistory();
+  shownUrls.splice(0).forEach((u) => URL.revokeObjectURL(u));
+  const box = $("history"); box.replaceChildren();
+  if (!h.length) {
+    const p = document.createElement("p"); p.className = "hist-empty";
+    p.textContent = "Aquí se guardarán tus últimas " + MAX_HISTORY + " caricaturas.";
+    box.append(p); return;
+  }
+  h.forEach((saved) => {
+    const src = saved.blob ? URL.createObjectURL(saved.blob) : saved.url;
+    if (saved.blob) shownUrls.push(src);
+    const item = { ...saved, src };
+    const b = document.createElement("button"); b.type = "button"; b.className = "hist-item";
+    const img = document.createElement("img"); img.src = src; img.alt = saved.desc; img.loading = "lazy";
+    const s = document.createElement("span"); s.textContent = saved.desc;
+    b.append(img, s);
+    b.addEventListener("click", () => {
+      const fresh = saved.blob ? { ...saved, src: URL.createObjectURL(saved.blob) } : item;
+      showResult(fresh); $("desc").value = saved.desc; window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+    box.append(b);
+  });
+}
+migrateOld().then(renderHistory);
+</script>
+</body>
+</html>

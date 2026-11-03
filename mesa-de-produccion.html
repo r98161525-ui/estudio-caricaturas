@@ -1,0 +1,546 @@
+<title>Mesa de Producción</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: cabecera tipo claqueta + tira de resumen + tablero de 5 etapas (como pistas de una línea de tiempo) */
+:root {
+  --bg: #eef1f2;
+  --surface: #ffffff;
+  --sunk: #e2e7e9;
+  --fg: #172226;
+  --muted: #5b6b71;
+  --line: #cfd8db;
+  --accent: #0f7c78;
+  --accent-ink: #ffffff;
+  --rec: #d9480f;
+  --warn: #a15c00;
+  --ok: #2b8a3e;
+  --font-display: "Unbounded", "Arial Black", system-ui, sans-serif;
+  --font-body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --s-1: .25rem; --s-2: .5rem; --s-3: .75rem; --s-4: 1rem; --s-5: 1.5rem; --s-6: 2rem;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1517; --surface: #172024; --sunk: #0b1012; --fg: #e4ecee; --muted: #8fa2a8;
+    --line: #26343a; --accent: #3cc2b9; --accent-ink: #062120; --rec: #ff7a45; --warn: #f0ad4e; --ok: #63c174;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1517; --surface: #172024; --sunk: #0b1012; --fg: #e4ecee; --muted: #8fa2a8;
+  --line: #26343a; --accent: #3cc2b9; --accent-ink: #062120; --rec: #ff7a45; --warn: #f0ad4e; --ok: #63c174;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.45;
+}
+.wrap {
+  max-width: 1400px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: var(--s-5) var(--s-6);
+  display: grid; gap: var(--s-5);
+}
+header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: var(--s-4); }
+.brand { display: grid; gap: var(--s-1); min-width: 0; }
+.slate {
+  font-family: var(--font-mono); font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted);
+  display: flex; align-items: center; gap: var(--s-2);
+}
+.dot { width: .55rem; height: .55rem; border-radius: 50%; background: var(--rec); box-shadow: 0 0 0 3px color-mix(in srgb, var(--rec) 22%, transparent); }
+.dot.idle { background: var(--muted); box-shadow: none; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(1.6rem, 4vw, 2.4rem); margin: 0; letter-spacing: -.02em; text-wrap: balance; }
+.actions { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; }
+button { font: inherit; cursor: pointer; }
+.btn {
+  border: 1px solid var(--line); background: var(--surface); color: var(--fg);
+  padding: .55rem .9rem; border-radius: 999px; font-weight: 600; font-size: .9rem;
+}
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn.danger { color: var(--rec); }
+.btn.danger.armed { background: var(--rec); color: var(--surface); border-color: var(--rec); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chips { display: inline-flex; background: var(--sunk); border-radius: 999px; padding: 3px; }
+.chips button { border: 0; background: transparent; color: var(--muted); padding: .4rem .8rem; border-radius: 999px; font-size: .85rem; font-weight: 600; }
+.chips button[aria-pressed="true"] { background: var(--surface); color: var(--fg); }
+
+.summary {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 1px;
+  background: var(--line); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden;
+}
+.stat { background: var(--surface); padding: var(--s-3) var(--s-4); display: grid; gap: 2px; min-width: 0; }
+.stat .k { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.stat .v { font-family: var(--font-mono); font-size: 1.5rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat .v.small { font-family: var(--font-body); font-size: .95rem; font-weight: 600; overflow-wrap: anywhere; }
+.stat .sub { font-family: var(--font-mono); font-size: .78rem; color: var(--muted); }
+
+.notice { font-size: .9rem; color: var(--warn); }
+.board-scroll { overflow-x: auto; padding-bottom: var(--s-2); }
+.board { display: grid; grid-template-columns: repeat(5, minmax(240px, 1fr)); gap: var(--s-3); min-width: 1240px; }
+@media (min-width: 1300px) { .board { min-width: 0; } }
+.col { display: grid; align-content: start; gap: var(--s-2); background: var(--sunk); border-radius: var(--r); padding: var(--s-2); min-width: 0; }
+.col-head { display: flex; align-items: baseline; justify-content: space-between; padding: var(--s-1) var(--s-2) var(--s-2); }
+.col-head h2 { margin: 0; font-family: var(--font-display); font-weight: 500; font-size: .85rem; letter-spacing: .02em; }
+.col-head .n { font-family: var(--font-mono); font-size: .8rem; color: var(--muted); }
+.track { height: 3px; border-radius: 2px; background: var(--line); margin: 0 var(--s-2) var(--s-1); }
+.track i { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+.empty-col { font-size: .85rem; color: var(--muted); padding: var(--s-3) var(--s-2); }
+
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: var(--s-3);
+  display: grid; gap: var(--s-2); text-align: left; color: var(--fg); width: 100%; min-width: 0;
+}
+.card:hover { border-color: var(--accent); }
+.card-top { display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; }
+.tag { font-family: var(--font-mono); font-size: .68rem; letter-spacing: .06em; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; background: var(--sunk); color: var(--muted); }
+.tag.short { color: var(--rec); }
+.tag.ex { border: 1px dashed var(--line); background: transparent; }
+.card-title { font-weight: 600; font-size: .95rem; overflow-wrap: anywhere; }
+.card-hook { font-size: .82rem; color: var(--muted); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.card-foot { display: flex; justify-content: space-between; align-items: center; gap: var(--s-2); font-family: var(--font-mono); font-size: .75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.date.soon { color: var(--rec); font-weight: 600; }
+.date.late { color: var(--warn); }
+.warn-title { font-size: .75rem; color: var(--warn); }
+.move { display: flex; gap: var(--s-1); }
+.move button { border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 6px; width: 1.9rem; height: 1.7rem; font-family: var(--font-mono); }
+.move button:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.move button:disabled { opacity: .3; cursor: default; }
+
+.empty-state { background: var(--surface); border: 1px dashed var(--line); border-radius: var(--r); padding: var(--s-5); display: grid; gap: var(--s-2); justify-items: start; }
+.empty-state h2 { margin: 0; font-family: var(--font-display); font-size: 1.1rem; font-weight: 500; }
+.empty-state p { margin: 0; color: var(--muted); max-width: 60ch; }
+
+dialog {
+  border: 1px solid var(--line); border-radius: 14px; padding: 0; background: var(--surface); color: var(--fg);
+  width: min(620px, calc(100vw - 32px)); max-height: calc(100vh - 32px);
+}
+dialog::backdrop { background: color-mix(in srgb, var(--sunk) 70%, transparent); backdrop-filter: blur(2px); }
+.dlg { display: grid; gap: var(--s-4); padding: var(--s-5); }
+.dlg h2 { margin: 0; font-family: var(--font-display); font-weight: 500; font-size: 1.1rem; }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3); }
+@media (max-width: 520px) { .row { grid-template-columns: 1fr; } }
+.field { display: grid; gap: var(--s-1); min-width: 0; }
+.field label, .field .lbl { font-size: .75rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+input[type="text"], input[type="date"], select, textarea {
+  font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: .55rem .7rem; width: 100%;
+}
+textarea { resize: vertical; min-height: 4.5rem; }
+.counter { font-family: var(--font-mono); font-size: .75rem; color: var(--muted); display: flex; justify-content: space-between; gap: var(--s-2); }
+.counter.over { color: var(--warn); }
+.checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--s-2); }
+.checks label { display: flex; gap: var(--s-2); align-items: center; font-size: .9rem; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: .45rem .6rem; cursor: pointer; }
+.checks input { accent-color: var(--accent); width: 1rem; height: 1rem; }
+.dlg-foot { display: flex; justify-content: space-between; gap: var(--s-2); flex-wrap: wrap; }
+.dlg-foot .right { display: flex; gap: var(--s-2); margin-left: auto; }
+
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  background: var(--fg); color: var(--bg); padding: .6rem 1rem; border-radius: 999px; font-size: .9rem; font-weight: 500;
+  max-width: calc(100vw - 32px);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .card { transition: border-color .15s; }
+  .dot:not(.idle) { animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .45; } }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div class="slate"><span class="dot idle" id="statusDot"></span><span id="statusText">Conectando…</span></div>
+      <h1>Mesa de Producción</h1>
+    </div>
+    <div class="actions">
+      <div class="chips" role="group" aria-label="Filtrar por formato">
+        <button type="button" data-filter="todos" aria-pressed="true">Todos</button>
+        <button type="button" data-filter="largo" aria-pressed="false">Largos</button>
+        <button type="button" data-filter="short" aria-pressed="false">Shorts</button>
+      </div>
+      <button type="button" class="btn primary" id="addBtn" disabled>+ Nuevo vídeo</button>
+    </div>
+  </header>
+
+  <section class="summary" aria-label="Resumen">
+    <div class="stat"><span class="k">En producción</span><span class="v" id="sProd">–</span><span class="sub">guion → edición</span></div>
+    <div class="stat"><span class="k">Ideas en reserva</span><span class="v" id="sIdeas">–</span><span class="sub">sin empezar</span></div>
+    <div class="stat"><span class="k">Salen en 7 días</span><span class="v" id="sWeek">–</span><span class="sub">con fecha programada</span></div>
+    <div class="stat"><span class="k">Próxima publicación</span><span class="v small" id="sNext">–</span><span class="sub" id="sNextDate"></span></div>
+  </section>
+
+  <p class="notice" id="notice" hidden></p>
+
+  <div id="emptyState" class="empty-state" hidden>
+    <h2>Tu tablero está vacío</h2>
+    <p>Cada vídeo pasa por cinco etapas: Idea, Guion, Grabación, Edición y Publicado. Añade tu primera idea con su gancho y muévela de columna a medida que avanza.</p>
+    <button type="button" class="btn primary" id="emptyAdd">+ Añadir primera idea</button>
+  </div>
+
+  <div class="board-scroll">
+    <div class="board" id="board"></div>
+  </div>
+</div>
+
+<dialog id="dlg" aria-labelledby="dlgTitle">
+  <form class="dlg" id="form" method="dialog">
+    <h2 id="dlgTitle">Nuevo vídeo</h2>
+    <div class="field">
+      <label for="fTitle">Título</label>
+      <input type="text" id="fTitle" maxlength="100" required placeholder="Ej. Probé vivir con 10 € al día durante una semana">
+      <div class="counter" id="titleCounter"><span id="titleHint">Unos 60 caracteres se ven completos en búsqueda</span><span id="titleCount">0/100</span></div>
+    </div>
+    <div class="field">
+      <label for="fHook">Gancho (primeros 5 segundos)</label>
+      <textarea id="fHook" rows="2" placeholder="La frase o imagen que hace que no pasen de largo"></textarea>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label for="fStage">Etapa</label>
+        <select id="fStage"></select>
+      </div>
+      <div class="field">
+        <label for="fFormat">Formato</label>
+        <select id="fFormat">
+          <option value="largo">Vídeo largo</option>
+          <option value="short">Short (≤ 3 min, vertical)</option>
+        </select>
+      </div>
+    </div>
+    <div class="field">
+      <label for="fDate">Fecha de publicación</label>
+      <input type="date" id="fDate">
+    </div>
+    <div class="field">
+      <span class="lbl">Lista antes de publicar</span>
+      <div class="checks" id="checks"></div>
+    </div>
+    <div class="field">
+      <label for="fNotes">Notas</label>
+      <textarea id="fNotes" rows="3" placeholder="Referencias, tomas que faltan, ideas de miniatura…"></textarea>
+    </div>
+    <div class="dlg-foot">
+      <button type="button" class="btn danger" id="delBtn" hidden>Eliminar</button>
+      <div class="right">
+        <button type="button" class="btn" id="cancelBtn">Cancelar</button>
+        <button type="submit" class="btn primary" id="saveBtn">Guardar</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+const STAGES = [
+  { id: "idea", name: "Idea" },
+  { id: "guion", name: "Guion" },
+  { id: "grabacion", name: "Grabación" },
+  { id: "edicion", name: "Edición" },
+  { id: "publicado", name: "Publicado" },
+];
+const CHECKS = [
+  ["miniatura", "Miniatura lista"],
+  ["titulo", "Título final"],
+  ["descripcion", "Descripción y enlaces"],
+  ["etiquetas", "Etiquetas"],
+  ["pantallaFinal", "Pantalla final"],
+  ["subtitulos", "Subtítulos"],
+];
+
+let db = null;
+let videos = [];
+let loaded = false;
+let filter = "todos";
+let editingId = null;
+
+const $ = (id) => document.getElementById(id);
+
+function parseDate(s) {
+  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+function today() { const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), t.getDate()); }
+function daysFromToday(s) { const d = parseDate(s); return d ? Math.round((d - today()) / 86400000) : null; }
+function fmtDate(s) {
+  const d = parseDate(s);
+  return d ? d.toLocaleDateString("es-ES", { weekday: "short", day: "numeric", month: "short" }) : "";
+}
+function checkCount(v) { return CHECKS.filter(([k]) => v.checklist && v.checklist[k]).length; }
+
+function setStatus(kind) {
+  const dot = $("statusDot"), txt = $("statusText"), notice = $("notice");
+  dot.classList.toggle("idle", kind !== "ok");
+  notice.hidden = true;
+  if (kind === "ok") txt.textContent = "Guardado en la nube";
+  if (kind === "slow") { txt.textContent = "Sin conexión al almacenamiento"; notice.hidden = false; notice.textContent = "Aún no se pueden cargar tus vídeos. Lo que ves puede no estar al día."; }
+  if (kind === "offline") { txt.textContent = "Solo lectura"; notice.hidden = false; notice.textContent = "Inicia sesión en Claude para guardar y ver tus vídeos en este tablero."; }
+  if (kind === "error") { txt.textContent = "Error de conexión"; notice.hidden = false; notice.textContent = "Se perdió la conexión con el almacenamiento. Recarga la página para volver a intentarlo."; }
+  $("addBtn").disabled = !db || kind === "error";
+}
+
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg; t.hidden = false;
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => { t.hidden = true; }, 2600);
+}
+
+function renderSummary() {
+  const inProd = videos.filter((v) => ["guion", "grabacion", "edicion"].includes(v.stage)).length;
+  const ideas = videos.filter((v) => v.stage === "idea").length;
+  const upcoming = videos
+    .filter((v) => v.stage !== "publicado" && daysFromToday(v.date) !== null && daysFromToday(v.date) >= 0)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const week = upcoming.filter((v) => daysFromToday(v.date) <= 7).length;
+  $("sProd").textContent = loaded ? inProd : "–";
+  $("sIdeas").textContent = loaded ? ideas : "–";
+  $("sWeek").textContent = loaded ? week : "–";
+  if (upcoming[0]) {
+    const d = daysFromToday(upcoming[0].date);
+    $("sNext").textContent = upcoming[0].title;
+    $("sNextDate").textContent = fmtDate(upcoming[0].date) + " · " + (d === 0 ? "hoy" : d === 1 ? "mañana" : "en " + d + " días");
+  } else {
+    $("sNext").textContent = loaded ? "Nada programado" : "–";
+    $("sNextDate").textContent = "";
+  }
+}
+
+function cardEl(v) {
+  const el = document.createElement("div");
+  el.className = "card";
+  el.tabIndex = 0;
+  el.setAttribute("role", "button");
+  el.setAttribute("aria-label", "Editar " + (v.title || "vídeo"));
+
+  const top = document.createElement("div");
+  top.className = "card-top";
+  const fmt = document.createElement("span");
+  fmt.className = "tag" + (v.format === "short" ? " short" : "");
+  fmt.textContent = v.format === "short" ? "Short" : "Largo";
+  top.append(fmt);
+  if (v.example) {
+    const ex = document.createElement("span");
+    ex.className = "tag ex"; ex.textContent = "Ejemplo";
+    top.append(ex);
+  }
+
+  const title = document.createElement("div");
+  title.className = "card-title"; title.textContent = v.title || "Sin título";
+  el.append(top, title);
+
+  if ((v.title || "").length > 60) {
+    const w = document.createElement("div");
+    w.className = "warn-title"; w.textContent = "Título de " + v.title.length + " caracteres: puede cortarse";
+    el.append(w);
+  }
+  if (v.hook) {
+    const h = document.createElement("div");
+    h.className = "card-hook"; h.textContent = "“" + v.hook + "”";
+    el.append(h);
+  }
+
+  const foot = document.createElement("div");
+  foot.className = "card-foot";
+  const date = document.createElement("span");
+  const dd = daysFromToday(v.date);
+  date.className = "date";
+  if (v.date) {
+    date.textContent = fmtDate(v.date);
+    if (v.stage !== "publicado" && dd !== null && dd < 0) { date.classList.add("late"); date.textContent += " · atrasado"; }
+    else if (v.stage !== "publicado" && dd !== null && dd <= 3) date.classList.add("soon");
+  } else {
+    date.textContent = "sin fecha";
+  }
+  const left = document.createElement("span");
+  left.style.display = "grid"; left.style.gap = "2px";
+  const prog = document.createElement("span");
+  prog.textContent = "lista " + checkCount(v) + "/" + CHECKS.length;
+  left.append(date, prog);
+
+  const idx = STAGES.findIndex((s) => s.id === v.stage);
+  const move = document.createElement("div");
+  move.className = "move";
+  const back = document.createElement("button");
+  back.type = "button"; back.textContent = "←"; back.disabled = idx <= 0 || !db;
+  back.setAttribute("aria-label", "Mover a la etapa anterior");
+  const fwd = document.createElement("button");
+  fwd.type = "button"; fwd.textContent = "→"; fwd.disabled = idx >= STAGES.length - 1 || !db;
+  fwd.setAttribute("aria-label", "Mover a la siguiente etapa");
+  back.addEventListener("click", (e) => { e.stopPropagation(); moveTo(v, idx - 1); });
+  fwd.addEventListener("click", (e) => { e.stopPropagation(); moveTo(v, idx + 1); });
+  move.append(back, fwd);
+  foot.append(left, move);
+  el.append(foot);
+
+  el.addEventListener("click", () => openEditor(v));
+  el.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target === el) openEditor(v); });
+  return el;
+}
+
+function render() {
+  renderSummary();
+  const board = $("board");
+  board.replaceChildren();
+  const shown = videos.filter((v) => filter === "todos" || v.format === filter);
+  $("emptyState").hidden = !(loaded && videos.length === 0);
+
+  STAGES.forEach((s, i) => {
+    const col = document.createElement("section");
+    col.className = "col";
+    col.setAttribute("aria-label", s.name);
+    const items = shown
+      .filter((v) => v.stage === s.id)
+      .sort((a, b) => (a.date || "9999").localeCompare(b.date || "9999") || (a.created || 0) - (b.created || 0));
+    const head = document.createElement("div");
+    head.className = "col-head";
+    const h = document.createElement("h2"); h.textContent = s.name;
+    const n = document.createElement("span"); n.className = "n"; n.textContent = String(items.length).padStart(2, "0");
+    head.append(h, n);
+    const track = document.createElement("div");
+    track.className = "track";
+    const fill = document.createElement("i");
+    fill.style.width = ((i + 1) / STAGES.length * 100) + "%";
+    track.append(fill);
+    col.append(head, track);
+    if (!loaded) {
+      const p = document.createElement("div"); p.className = "empty-col"; p.textContent = "Cargando…"; col.append(p);
+    } else if (items.length === 0) {
+      const p = document.createElement("div"); p.className = "empty-col"; p.textContent = "Nada en esta etapa"; col.append(p);
+    }
+    items.forEach((v) => col.append(cardEl(v)));
+    board.append(col);
+  });
+}
+
+async function moveTo(v, idx) {
+  if (!db || idx < 0 || idx >= STAGES.length) return;
+  try {
+    await db.collection("videos").doc(v.id).update({ stage: STAGES[idx].id });
+    toast("Movido a " + STAGES[idx].name);
+  } catch (e) {
+    toast("No se pudo mover el vídeo. Inténtalo de nuevo.");
+  }
+}
+
+// Editor
+STAGES.forEach((s) => { const o = document.createElement("option"); o.value = s.id; o.textContent = s.name; $("fStage").append(o); });
+CHECKS.forEach(([k, label]) => {
+  const l = document.createElement("label");
+  const c = document.createElement("input"); c.type = "checkbox"; c.id = "chk-" + k;
+  l.append(c, document.createTextNode(label));
+  $("checks").append(l);
+});
+
+function updateCounter() {
+  const n = $("fTitle").value.length;
+  $("titleCount").textContent = n + "/100";
+  $("titleCounter").classList.toggle("over", n > 60);
+  $("titleHint").textContent = n > 60 ? "Pasa de 60: en búsqueda se verá cortado" : "Unos 60 caracteres se ven completos en búsqueda";
+}
+$("fTitle").addEventListener("input", updateCounter);
+
+function openEditor(v) {
+  editingId = v ? v.id : null;
+  $("dlgTitle").textContent = v ? "Editar vídeo" : "Nuevo vídeo";
+  $("fTitle").value = v ? v.title || "" : "";
+  $("fHook").value = v ? v.hook || "" : "";
+  $("fStage").value = v ? v.stage || "idea" : "idea";
+  $("fFormat").value = v ? v.format || "largo" : (filter === "short" ? "short" : "largo");
+  $("fDate").value = v ? v.date || "" : "";
+  $("fNotes").value = v ? v.notes || "" : "";
+  CHECKS.forEach(([k]) => { $("chk-" + k).checked = !!(v && v.checklist && v.checklist[k]); });
+  $("delBtn").hidden = !v;
+  $("delBtn").classList.remove("armed");
+  $("delBtn").textContent = "Eliminar";
+  $("saveBtn").disabled = !db;
+  updateCounter();
+  $("dlg").showModal();
+  $("fTitle").focus();
+}
+
+$("addBtn").addEventListener("click", () => openEditor(null));
+$("emptyAdd").addEventListener("click", () => openEditor(null));
+$("cancelBtn").addEventListener("click", () => $("dlg").close());
+
+$("form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!db) return;
+  const title = $("fTitle").value.trim();
+  if (!title) { $("fTitle").focus(); return; }
+  const prev = videos.find((v) => v.id === editingId);
+  const checklist = {};
+  CHECKS.forEach(([k]) => { checklist[k] = $("chk-" + k).checked; });
+  const data = {
+    title,
+    hook: $("fHook").value.trim(),
+    stage: $("fStage").value,
+    format: $("fFormat").value,
+    date: $("fDate").value,
+    notes: $("fNotes").value.trim(),
+    checklist,
+    created: prev ? prev.created || Date.now() : Date.now(),
+  };
+  $("saveBtn").disabled = true;
+  try {
+    if (editingId) await db.collection("videos").doc(editingId).set(data);
+    else await db.collection("videos").add(data);
+    $("dlg").close();
+    toast(editingId ? "Cambios guardados" : "Vídeo añadido");
+  } catch (err) {
+    toast(err && err.code === "quota_exceeded" ? "El tablero está lleno. Elimina vídeos antiguos para añadir más." : "No se pudo guardar. Revisa tu conexión e inténtalo de nuevo.");
+  } finally {
+    $("saveBtn").disabled = false;
+  }
+});
+
+$("delBtn").addEventListener("click", async () => {
+  const b = $("delBtn");
+  if (!b.classList.contains("armed")) { b.classList.add("armed"); b.textContent = "¿Seguro? Eliminar"; return; }
+  try {
+    await db.collection("videos").doc(editingId).delete();
+    $("dlg").close();
+    toast("Vídeo eliminado");
+  } catch (e) {
+    toast("No se pudo eliminar. Inténtalo de nuevo.");
+  }
+});
+
+document.querySelectorAll("[data-filter]").forEach((b) => {
+  b.addEventListener("click", () => {
+    filter = b.dataset.filter;
+    document.querySelectorAll("[data-filter]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    try { localStorage.setItem("mesa-filtro", filter); } catch (e) {}
+    render();
+  });
+});
+try {
+  const f = localStorage.getItem("mesa-filtro");
+  if (f && document.querySelector('[data-filter="' + f + '"]')) document.querySelector('[data-filter="' + f + '"]').click();
+} catch (e) {}
+
+render();
+
+(async () => {
+  try { db = window.claude ? await window.claude.use("db") : null; } catch (e) { db = null; }
+  if (!db) { loaded = true; setStatus("offline"); render(); return; }
+  setStatus("loading");
+  const timer = setTimeout(() => setStatus("slow"), 10000);
+  db.collection("videos").onSnapshot(
+    (snap) => {
+      videos = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      if (!snap.metadata.fromCache) { clearTimeout(timer); loaded = true; setStatus("ok"); }
+      else if (snap.size) loaded = true;
+      render();
+    },
+    () => { clearTimeout(timer); loaded = true; setStatus("error"); render(); }
+  );
+})();
+</script>
