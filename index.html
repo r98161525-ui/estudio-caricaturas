@@ -561,12 +561,25 @@ const SERVICES = {
   },
 };
 
+// Sin llave, el servicio gratis solo da 1 imagen cada 45 segundos (si pides antes, devuelve un aviso en vez del dibujo).
+const FREE_GAP = 46000;
+function getLastFree() { try { return Number(localStorage.getItem("caricaturas-ultima-gratis")) || 0; } catch (e) { return 0; } }
+function setLastFree(t) { try { localStorage.setItem("caricaturas-ultima-gratis", String(t)); } catch (e) {} }
+function freeWait() { return getActive() ? 0 : Math.max(0, getLastFree() + FREE_GAP - Date.now()); }
+setInterval(() => {
+  const s = Math.ceil(freeWait() / 1000);
+  if ($("genBtn").disabled && !s) return;
+  $("genBtn").textContent = s ? "Espera " + s + " s (límite del modo gratis)" : "Crear imagen";
+}, 500);
+
 // Devuelve { src, blob? }. Con llave: el servicio elegido; sin llave: servicio gratuito básico.
 async function makeImage(prompt) {
   const sz = SIZES.find((s) => s.id === size);
   const act = getActive();
   const seed = newSeed();
   if (act) return SERVICES[act.provider](prompt, sz, act.key, seed);
+  if (freeWait() > 0) throw new Error("espera");
+  setLastFree(Date.now());
   const [w, h] = sz.free;
   const url = "https://image.pollinations.ai/prompt/" + encodeURIComponent(prompt) +
     "?width=" + w + "&height=" + h + "&seed=" + seed + "&nologo=true";
@@ -592,6 +605,7 @@ function showLoading(text) {
 function showError(err) {
   const why = {
     llave: "El servicio rechazó tu llave. En Ajustes, quítala y pega una nueva, o elige otro servicio.",
+    espera: "El modo gratis solo deja crear 1 imagen cada 45 segundos. Espera a que termine la cuenta atrás del botón y vuelve a pulsarlo. Con una llave en Ajustes no hay que esperar.",
     filtro: "El servicio no quiso dibujar esa descripción (su filtro de contenido la bloqueó). Prueba a describirlo de otra forma.",
     local: "Las llaves de NVIDIA solo funcionan si abres el Estudio con «Iniciar Estudio.bat» (está en la misma carpeta). En Ajustes puedes elegir otro servicio mientras tanto.",
     saldo: "Se acabó tu uso gratuito en este servicio por ahora. En Ajustes, elige otro servicio o la calidad básica, o espera a que se recargue.",
@@ -634,6 +648,10 @@ async function generate(desc) {
 }
 
 async function generate3(desc) {
+  if (!getActive()) {
+    toast("En el modo gratis solo sale 1 imagen cada 45 segundos. Usa Crear imagen, o pega una llave en Ajustes para crear 3 a la vez.");
+    return;
+  }
   const prompt = buildPrompt(desc);
   setBusy(true); showLoading("Dibujando 3 versiones a la vez… puede tardar hasta un minuto.");
   const results = await Promise.allSettled([0, 1, 2].map(() => makeImage(prompt)));
