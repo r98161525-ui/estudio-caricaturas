@@ -54,6 +54,11 @@ Necesitas internet: las imágenes las dibujan servicios en línea.
 - Los mensajes de error muestran un "Detalle técnico" para poder averiguar qué pasó.
 - Con este mismo servidor se podría añadir OpenAI más adelante (es de pago: preguntar antes).
 
+## Cambios (versión 5, 4 de noviembre de 2026)
+- Publicado en internet con GitHub Pages: https://r98161525-ui.github.io/estudio-caricaturas/ (el repositorio pasó a público; las llaves no están en los archivos).
+- En el enlace público funciona todo menos NVIDIA, que necesita abrir el Estudio con `Iniciar Estudio.bat`.
+- Modo gratis (sin llave): el servicio solo da 1 imagen cada 45 segundos; si pides antes devuelve un aviso amarillo "Free limit reached". Ahora el botón muestra una cuenta atrás y **Crear 3 versiones** pide una llave.
+
 ## Cómo funciona por dentro (en simple)
 - Todo está en un solo archivo: `index.html`.
 - Las imágenes las crea **Pollinations** (gratis, sin cuenta). La página traduce tus elecciones de estilo y textura a inglés, que el servicio entiende mejor.
