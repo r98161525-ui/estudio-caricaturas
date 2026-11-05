@@ -59,6 +59,13 @@ Necesitas internet: las imágenes las dibujan servicios en línea.
 - En el enlace público funciona todo menos NVIDIA, que necesita abrir el Estudio con `Iniciar Estudio.bat`.
 - Modo gratis (sin llave): el servicio solo da 1 imagen cada 45 segundos; si pides antes devuelve un aviso amarillo "Free limit reached". Ahora el botón muestra una cuenta atrás y **Crear 3 versiones** pide una llave.
 
+## Bot de Telegram (4 de noviembre de 2026)
+- Enlace público: https://t.me/Estudios_caricaturas_2026_bot — funciona (probado desde el celular).
+- Vive en Cloudflare Workers (`estudio-caricaturas-bot.r98161525.workers.dev`), así que responde con la computadora apagada.
+- Código en `bot/worker.js`, guía en `bot/COMO-INSTALAR.md`.
+- Dibuja con la IA gratuita de Cloudflare (enlace "AI" de Workers AI, modelo FLUX.1 schnell, imágenes cuadradas). Pollinations sin llave no funciona desde Cloudflare (código 402).
+- El token está guardado solo como secreto `BOT_TOKEN` en Cloudflare. Nunca en archivos ni en GitHub.
+
 ## Cómo funciona por dentro (en simple)
 - Todo está en un solo archivo: `index.html`.
 - Las imágenes las crea **Pollinations** (gratis, sin cuenta). La página traduce tus elecciones de estilo y textura a inglés, que el servicio entiende mejor.
