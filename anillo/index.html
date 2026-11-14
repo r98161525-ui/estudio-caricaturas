@@ -407,7 +407,7 @@
     }
 
     // corazones que flotan
-    if (!reduce && build > T_FIN && Math.random() < 0.06) hearts.push(nuevoCorazon(Math.random() * cv.clientWidth, cv.clientHeight + 10, false));
+    if (build > T_FIN && Math.random() < (reduce ? 0.03 : 0.06)) hearts.push(nuevoCorazon(Math.random() * cv.clientWidth, cv.clientHeight + 10, false));
     hearts = hearts.filter(hh => hh.life > 0 && hh.y > -30);
     for (const hh of hearts) {
       hh.age += 1 / 60;
