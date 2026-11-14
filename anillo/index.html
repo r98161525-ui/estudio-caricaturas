@@ -52,6 +52,30 @@
   .msg .cursor { animation: parpadeo 1s steps(1) infinite; }
   @keyframes parpadeo { 50% { opacity: 0; } }
   @media (prefers-reduced-motion: reduce) { .msg .cursor { animation: none; } }
+  .contador { color: var(--rose); letter-spacing: .1em; }
+  .toque {
+    position: absolute; transform: translate(-50%, 0); pointer-events: none; white-space: nowrap;
+    color: var(--rose); font-size: 14px; font-weight: 700; letter-spacing: .04em;
+    text-shadow: 0 0 12px rgba(255,143,177,.6);
+    animation: subir 2.2s ease-out forwards;
+  }
+  @keyframes subir { 0% { opacity: 0; transform: translate(-50%, 8px) scale(.9); } 15% { opacity: 1; transform: translate(-50%, 0) scale(1); } 100% { opacity: 0; transform: translate(-50%, -70px); } }
+  .sorpresa {
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 10px; pointer-events: none; background: rgba(7,8,11,.55);
+    opacity: 0; transition: opacity .9s ease; padding-inline: 24px; text-align: center;
+  }
+  .sorpresa.ver { opacity: 1; }
+  .sorpresa-txt {
+    font-size: clamp(22px, 6vw, 40px); font-weight: 700; color: var(--fg); letter-spacing: .04em; text-wrap: balance;
+    text-shadow: 0 0 24px rgba(255,143,177,.8), 0 0 48px rgba(159,211,255,.4);
+  }
+  .sorpresa-sub {
+    font-size: clamp(14px, 3.6vw, 20px); color: var(--rose); font-weight: 700; letter-spacing: .05em;
+    text-shadow: 0 0 14px rgba(255,143,177,.6);
+    opacity: 0; transform: translateY(8px); transition: opacity .8s ease 1.2s, transform .8s ease 1.2s;
+  }
+  .sorpresa.ver .sorpresa-sub { opacity: 1; transform: none; }
   .bar {
     border-top: 1px solid var(--line);
     padding-block: 10px;
@@ -92,7 +116,8 @@
   <div class="hud tl">anillo.py<br><b>ascii 3d</b> · diamante corte brillante</div>
   <div class="hud tr"><span id="fps">-- fps</span> · <span id="grid">--×--</span><br><span id="estadoHud">construyendo 0%</span></div>
   <div class="hud bl">luces: clave · borde · destello<br>arrastra para girar</div>
-  <div class="hud br">toca para soltar corazones<br><span id="frame">frame 0</span></div>
+  <div class="hud br">toca la pantalla o el diamante<br><span id="contador" class="contador">♡♡♡♡♡♡♡♡♡♡</span></div>
+  <div class="sorpresa" id="sorpresa" hidden><div class="sorpresa-txt" id="sorpresaTxt">Eres lo más bonito que me ha pasado 💍</div><div class="sorpresa-sub">Premio desbloqueado: mi corazón entero 💖</div></div>
   <div class="para" id="para"></div>
   <div class="msg" aria-live="off"><span id="msg"></span><span class="cursor">▍</span></div>
   <div class="codigo" id="codigo" aria-hidden="true"></div>
@@ -200,7 +225,8 @@
 
   // ---------- estado ----------
   let angY = 0.4, angX = 0.18, velY = 0.55, paused = false, frame = 0;
-  let drag = null, sparks = [], hearts = [], fontFam = 'monospace';
+  let drag = null, sparks = [], hearts = [], fontFam = 'monospace', gemPos = null;
+  const BRILLOS = ['*', '+', '✦', '✧', '·', '*'];
   const GLIFOS = ['♥', '♥', '♡', '<3', '❤'];
   function nuevoCorazon(x, y, burst) {
     const a = Math.random() * TAU, v = 1.5 + Math.random() * 3.5;
@@ -358,6 +384,7 @@
       const offX0 = (cv.clientWidth - w) / 2, offY0 = (cv.clientHeight - h) / 2;
       const gx = offX0 + ox, gyp = offY0 + oy - gys * s * scale;
       const rad = scale * (0.75 + 0.12 * Math.sin(t * 2.2));
+      gemPos = { x: gx, y: gyp, r: scale * 0.55 };
       const gr = ctx.createRadialGradient(gx, gyp, 0, gx, gyp, rad);
       gr.addColorStop(0, 'rgba(210,240,255,0.32)');
       gr.addColorStop(0.35, 'rgba(120,200,255,0.13)');
@@ -415,7 +442,9 @@
       hh.y += hh.vy; hh.vy *= hh.burst ? 0.985 : 1;
       if (hh.burst) { hh.vy -= 0.02; hh.life -= 0.008; } else hh.life -= 0.002;
       ctx.font = `${hh.size}px ${fontFam}`;
-      ctx.fillStyle = `rgba(255,${120 + hh.tone},${160 + hh.tone / 2},${Math.min(1, hh.life) * 0.85})`;
+      ctx.fillStyle = hh.azul
+        ? `rgba(${150 + hh.tone},${215 + hh.tone / 3 | 0},255,${Math.min(1, hh.life)})`
+        : `rgba(255,${120 + hh.tone},${160 + hh.tone / 2},${Math.min(1, hh.life) * 0.85})`;
       ctx.fillText(hh.g, hh.x, hh.y);
     }
     ctx.font = `${FONT_PX}px ${fontFam}`;
@@ -487,6 +516,7 @@
   function reiniciar() {
     build = 0; ultimoN = -1; sparks = []; hearts = [];
     stage.classList.remove('listo'); pararMensajes();
+    toques = 0; sorpresaHecha = false; contEl.textContent = '♡'.repeat(META);
   }
   document.getElementById('repetir').addEventListener('click', reiniciar);
   function loop(now) {
@@ -507,7 +537,7 @@
     }
     render(clock);
     fpsN++; fpsT += dt;
-    if (fpsT > 0.5) { fpsEl.textContent = `${Math.round(fpsN / fpsT)} fps`; fpsN = 0; fpsT = 0; frEl.textContent = `frame ${frame}`; }
+    if (fpsT > 0.5) { fpsEl.textContent = `${Math.round(fpsN / fpsT)} fps`; fpsN = 0; fpsT = 0; if (frEl) frEl.textContent = `frame ${frame}`; }
     requestAnimationFrame(loop);
   }
 
@@ -522,10 +552,62 @@
   cv.addEventListener('pointerup', e => {
     if (!moved) {
       const b = cv.getBoundingClientRect();
-      for (let i = 0; i < 26; i++) hearts.push(nuevoCorazon(e.clientX - b.left, e.clientY - b.top, true));
+      const px = e.clientX - b.left, py = e.clientY - b.top;
+      const enDiamante = gemPos && Math.hypot(px - gemPos.x, py - gemPos.y) < gemPos.r && build > T_DIAM;
+      if (enDiamante) {
+        // lluvia de destellos azules desde el diamante
+        for (let i = 0; i < 40; i++) {
+          const h = nuevoCorazon(gemPos.x, gemPos.y, true);
+          h.azul = true; h.g = BRILLOS[(Math.random() * BRILLOS.length) | 0]; h.vy -= 1.5;
+          hearts.push(h);
+        }
+      } else {
+        for (let i = 0; i < 26; i++) hearts.push(nuevoCorazon(px, py, true));
+      }
+      mensajeToque(px, py);
+      contarToque();
     }
     drag = null;
   });
+
+  // ---------- mensaje bonito en cada toque ----------
+  const TOQUES = [
+    'te quiero', 'eres preciosa', 'mi vida', 'me encantas', 'eres única',
+    'mi persona favorita', 'qué suerte tenerte', 'siempre tú', 'mi lugar seguro',
+    'me haces feliz', 'eres mi sueño', 'contigo siempre', 'mi corazón es tuyo', 'te elijo',
+  ];
+  let ultimoToque = -1;
+  function mensajeToque(x, y) {
+    let k; do { k = (Math.random() * TOQUES.length) | 0; } while (k === ultimoToque && TOQUES.length > 1);
+    ultimoToque = k;
+    const el = document.createElement('div');
+    el.className = 'toque'; el.textContent = TOQUES[k];
+    const w = stage.clientWidth;
+    el.style.left = Math.max(70, Math.min(w - 70, x)) + 'px'; el.style.top = Math.max(40, y - 30) + 'px';
+    stage.appendChild(el);
+    setTimeout(() => el.remove(), 2200);
+  }
+
+  // ---------- sorpresa a los 10 toques ----------
+  const META = 10;
+  let toques = 0, sorpresaHecha = false;
+  const contEl = document.getElementById('contador');
+  function contarToque() {
+    if (sorpresaHecha) return;
+    toques++;
+    contEl.textContent = '♥'.repeat(toques) + '♡'.repeat(META - toques);
+    if (toques >= META) sorpresa();
+  }
+  function sorpresa() {
+    sorpresaHecha = true;
+    contEl.textContent = '';
+    const el = document.getElementById('sorpresa');
+    el.hidden = false;
+    requestAnimationFrame(() => el.classList.add('ver'));
+    const w = stage.clientWidth, hgt = stage.clientHeight;
+    for (let i = 0; i < 90; i++) hearts.push(nuevoCorazon(Math.random() * w, hgt * (0.3 + Math.random() * 0.4), true));
+    setTimeout(() => { el.classList.remove('ver'); setTimeout(() => { el.hidden = true; }, 900); }, 6500);
+  }
 
   // ---------- mensajes bonitos (se escriben solos) ----------
   const MENSAJES = [
