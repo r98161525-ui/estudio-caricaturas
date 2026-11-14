@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>html,body{margin:0}</style>
+<title>Anillo ASCII</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap">
+<style>
+  /* Una sola pantalla de terminal: el anillo ocupa todo, una barra mínima abajo. Look oscuro a propósito. */
+  :root {
+    --bg: #07080b;
+    --fg: #e9edf2;
+    --dim: #6b7380;
+    --line: #1c2028;
+    --gem: #cfe9ff;
+    --accent: #ffa3c0;
+    --rose: #ff8fb1;
+    --mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+    color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg); color: var(--fg); font-family: var(--mono);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .stage { position: relative; flex: 1; min-height: 0; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+  canvas:active { cursor: grabbing; }
+  .hud {
+    position: absolute; font-size: 11px; color: var(--dim); line-height: 1.5;
+    pointer-events: none; letter-spacing: .02em; font-variant-numeric: tabular-nums;
+  }
+  .hud.tl { top: 12px; left: max(16px, env(safe-area-inset-left, 0px)); }
+  .hud.tr { top: 12px; right: max(16px, env(safe-area-inset-right, 0px)); text-align: right; }
+  .hud.bl { bottom: 12px; left: max(16px, env(safe-area-inset-left, 0px)); }
+  .hud.br { bottom: 12px; right: max(16px, env(safe-area-inset-right, 0px)); text-align: right; }
+  .hud b { color: var(--fg); font-weight: 400; }
+  @media (max-width: 520px) { .hud.bl { display: none; } .hud { font-size: 10px; } }
+  .para {
+    position: absolute; left: 0; right: 0; bottom: calc(9% + 30px); text-align: center; pointer-events: none;
+    font-size: clamp(15px, 3.6vw, 22px); color: var(--fg); letter-spacing: .08em; font-weight: 700;
+    text-shadow: 0 0 18px rgba(255,143,177,.45);
+    padding-inline: 16px;
+  }
+  .msg {
+    position: absolute; left: 0; right: 0; bottom: 9%; text-align: center; pointer-events: none;
+    font-size: clamp(12px, 2.9vw, 15px); color: var(--rose); letter-spacing: .04em; min-height: 1.5em;
+    padding-inline: 16px;
+  }
+  .msg .cursor { animation: parpadeo 1s steps(1) infinite; }
+  @keyframes parpadeo { 50% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .msg .cursor { animation: none; } }
+  .bar {
+    border-top: 1px solid var(--line);
+    padding-block: 10px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; font-size: 12px;
+  }
+  .bar label { color: var(--dim); }
+  .bar input {
+    flex: 1 1 140px; min-width: 0; background: transparent; color: var(--fg);
+    border: 1px solid var(--line); border-radius: 4px; padding: 7px 9px; font: inherit;
+  }
+  .bar input:focus-visible, .bar button:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+  .bar button {
+    background: transparent; color: var(--fg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 7px 12px; font: inherit; cursor: pointer;
+  }
+  .bar button:hover { border-color: var(--dim); }
+  .bar .estado { color: var(--accent); min-width: 7ch; }
+  .para, .msg { transition: opacity .9s ease; }
+  .stage:not(.listo) .para, .stage:not(.listo) .msg { opacity: 0; }
+  .codigo {
+    position: absolute; left: 0; right: 0; bottom: calc(9% - 14px);
+    margin-inline: auto; width: min(560px, calc(100% - 32px));
+    font-size: 11px; line-height: 1.45; color: var(--dim); white-space: pre; overflow: hidden;
+    height: calc(1.45em * 6); pointer-events: none; transition: opacity .9s ease;
+    border-top: 1px solid var(--line); padding-top: 6px; background: rgba(7,8,11,.88);
+  }
+  .stage.listo .codigo { opacity: 0; }
+  .codigo .n { color: #3a404c; display: inline-block; width: 3ch; }
+  .codigo .k { color: #b9a6ff; }
+  .codigo .f { color: #9fd3ff; }
+  .codigo .act { background: rgba(255,143,177,.08); }
+</style>
+
+<div class="stage">
+  <canvas id="lienzo" aria-label="Anillo de diamante en 3D dibujado con caracteres ASCII, girando"></canvas>
+  <div class="hud tl">anillo.py<br><b>ascii 3d</b> · diamante corte brillante</div>
+  <div class="hud tr"><span id="fps">-- fps</span> · <span id="grid">--×--</span><br><span id="estadoHud">construyendo 0%</span></div>
+  <div class="hud bl">luces: clave · borde · destello<br>arrastra para girar</div>
+  <div class="hud br">toca para soltar corazones<br><span id="frame">frame 0</span></div>
+  <div class="para" id="para"></div>
+  <div class="msg" aria-live="off"><span id="msg"></span><span class="cursor">▍</span></div>
+  <div class="codigo" id="codigo" aria-hidden="true"></div>
+</div>
+<form class="bar" id="form">
+  <label for="nombre">Nombre</label>
+  <input id="nombre" maxlength="24" placeholder="escribe un nombre" autocomplete="off">
+  <button type="submit" id="copiar">Copiar enlace</button>
+  <button type="button" id="repetir">Crear otra vez</button>
+  <span class="estado" id="estado" aria-live="polite"></span>
+</form>
+
+<script>
+(() => {
+  const cv = document.getElementById('lienzo');
+  const ctx = cv.getContext('2d');
+  const RAMP = ' .,:;-=+*xo#%@';
+  let FONT_PX = 11;
+  let cellW = 7, cellH = 12, cols = 0, rows = 0, dpr = 1, lastW = -1, lastH = -1;
+
+  // ---------- geometría: lista de puntos {p, n, kind} ----------
+  const pts = [];
+  const add = (x, y, z, nx, ny, nz, k) => { const l = Math.hypot(nx, ny, nz) || 1; pts.push(x, y, z, nx / l, ny / l, nz / l, k); };
+  const TAU = Math.PI * 2;
+
+  // banda: toro en el plano XY (el anillo está de pie), eje Z
+  const R = 1.0, r = 0.11;
+  for (let i = 0; i < 520; i++) {
+    const u = i / 520 * TAU;
+    for (let j = 0; j < 56; j++) {
+      const v = j / 56 * TAU;
+      const cx = Math.cos(u), cy = Math.sin(u);
+      // banda un poco más plana por dentro, como un aro real
+      const nx = Math.cos(v) * cx, ny = Math.cos(v) * cy, nz = Math.sin(v);
+      add((R + r * Math.cos(v)) * cx, (R + r * Math.cos(v)) * cy, r * 1.25 * Math.sin(v), nx, ny, nz, 0);
+    }
+  }
+
+  // diamante: eje Y, encima de la banda
+  const yA = 1.08, yG = 1.52, yT = 1.74, rG = 0.50, rT = 0.28;
+  const facet = (phi, n) => (Math.floor(phi / (TAU / n)) + 0.5) * (TAU / n);
+  // pabellón (cono hacia abajo, 8 facetas)
+  for (let i = 0; i < 46; i++) {
+    const t = (i + 0.5) / 46, y = yA + (yG - yA) * t, rad = rG * t;
+    const m = Math.max(24, Math.floor(260 * t));
+    for (let j = 0; j < m; j++) {
+      const ph = j / m * TAU, pc = facet(ph, 8);
+      add(rad * Math.cos(ph), y, rad * Math.sin(ph), Math.cos(pc) * (yG - yA), -rG, Math.sin(pc) * (yG - yA), 1);
+    }
+  }
+  // corona (tronco de cono, 16 facetas)
+  for (let i = 0; i < 22; i++) {
+    const t = (i + 0.5) / 22, y = yG + (yT - yG) * t, rad = rG + (rT - rG) * t;
+    for (let j = 0; j < 260; j++) {
+      const ph = j / 260 * TAU, pc = facet(ph + (i % 2 ? 0.2 : 0), 16);
+      add(rad * Math.cos(ph), y, rad * Math.sin(ph), Math.cos(pc) * (yT - yG), rG - rT, Math.sin(pc) * (yT - yG), 1);
+    }
+  }
+  // mesa (tapa plana)
+  for (let i = 0; i < 16; i++) {
+    const rad = rT * (i + 0.5) / 16, m = Math.max(10, Math.floor(160 * rad / rT));
+    for (let j = 0; j < m; j++) { const ph = j / m * TAU; add(rad * Math.cos(ph), yT, rad * Math.sin(ph), 0, 1, 0, 1); }
+  }
+  // garras (4 cilindros finos)
+  for (let g = 0; g < 4; g++) {
+    const a = Math.PI / 4 + g * Math.PI / 2;
+    const p0 = [0.13 * Math.cos(a), 1.08, 0.13 * Math.sin(a)];
+    const p1 = [(rG + 0.04) * Math.cos(a), yG + 0.03, (rG + 0.04) * Math.sin(a)];
+    const d = [p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2]], L = Math.hypot(...d);
+    const ax = d.map(x => x / L);
+    let b1 = [ax[1] * 0 - ax[2] * 1, ax[2] * 0 - ax[0] * 0, ax[0] * 1 - ax[1] * 0];
+    let bl = Math.hypot(...b1) || 1; b1 = b1.map(x => x / bl);
+    const b2 = [ax[1] * b1[2] - ax[2] * b1[1], ax[2] * b1[0] - ax[0] * b1[2], ax[0] * b1[1] - ax[1] * b1[0]];
+    for (let i = 0; i <= 30; i++) {
+      const t = i / 30;
+      for (let j = 0; j < 20; j++) {
+        const ph = j / 20 * TAU, c = Math.cos(ph), s = Math.sin(ph), rr = 0.068;
+        const n = [b1[0] * c + b2[0] * s, b1[1] * c + b2[1] * s, b1[2] * c + b2[2] * s];
+        add(p0[0] + d[0] * t + n[0] * rr, p0[1] + d[1] * t + n[1] * rr, p0[2] + d[2] * t + n[2] * rr, n[0], n[1], n[2], 4);
+      }
+    }
+  }
+  const P = new Float32Array(pts);
+  const N = P.length / 7;
+
+  // ---------- construcción: cuándo aparece cada punto y desde dónde vuela ----------
+  const T_BANDA = 0.2, T_DIAM = 3.2, T_GARRA = 5.4, T_ORB = 6.8, T_FIN = 8.4, VUELO = 0.55;
+  const REV = new Float32Array(N), OFF = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) {
+    const o = i * 7, x = P[o], y = P[o + 1], k = P[o + 6];
+    let rv;
+    if (k === 0) { // banda: desde abajo, cerrándose por los dos lados
+      let a = Math.atan2(y, x) + Math.PI / 2; a = Math.abs(Math.atan2(Math.sin(a), Math.cos(a)));
+      rv = T_BANDA + (T_DIAM - T_BANDA - 0.3) * (a / Math.PI);
+    } else if (k === 1) rv = T_DIAM + (T_GARRA - T_DIAM - 0.3) * (y - yA) / (yT - yA);
+    else rv = T_GARRA + (T_ORB - T_GARRA - 0.3) * Math.max(0, Math.min(1, (y - 1.08) / (yG - 1.08)));
+    REV[i] = rv + Math.random() * 0.25;
+    const th = Math.random() * TAU, ph = Math.acos(2 * Math.random() - 1), m = 0.4 + Math.random() * 0.9;
+    OFF[i * 3] = m * Math.sin(ph) * Math.cos(th); OFF[i * 3 + 1] = m * Math.cos(ph) - 0.3; OFF[i * 3 + 2] = m * Math.sin(ph) * Math.sin(th);
+  }
+  let build = 0, letras = 0; // segundos desde que empezó la construcción; letras visibles
+
+  // órbitas: 3 elipses finas alrededor del anillo
+  const orbits = [[0.35, 0.0], [-0.5, 1.2], [0.9, 2.3]].map(([tilt, rot]) => ({ tilt, rot }));
+
+  // ---------- estado ----------
+  let angY = 0.4, angX = 0.18, velY = 0.55, paused = false, frame = 0;
+  let drag = null, sparks = [], hearts = [], fontFam = 'monospace';
+  const GLIFOS = ['♥', '♥', '♡', '<3', '❤'];
+  function nuevoCorazon(x, y, burst) {
+    const a = Math.random() * TAU, v = 1.5 + Math.random() * 3.5;
+    return {
+      x, y, burst, age: 0, ph: Math.random() * TAU, life: burst ? 1 : 1.6,
+      vx: burst ? Math.cos(a) * v : 0, vy: burst ? Math.sin(a) * v - 2 : -(0.35 + Math.random() * 0.6),
+      size: Math.round(10 + Math.random() * (burst ? 16 : 12)), tone: (Math.random() * 80) | 0,
+      g: GLIFOS[(Math.random() * GLIFOS.length) | 0]
+    };
+  }
+  let zbuf, lum, kindBuf;
+
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = cv.clientWidth, h = cv.clientHeight;
+    lastW = w; lastH = h;
+    FONT_PX = w < 520 ? 8 : w < 800 ? 10 : 11;
+    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    fontFam = getComputedStyle(document.body).fontFamily;
+    ctx.font = `${FONT_PX}px ${fontFam}`;
+    cellW = Math.max(5, ctx.measureText('M').width);
+    cellH = Math.round(FONT_PX * 1.12);
+    cols = Math.floor(w / cellW); rows = Math.floor(h / cellH);
+    zbuf = new Float32Array(cols * rows); lum = new Float32Array(cols * rows); kindBuf = new Uint8Array(cols * rows);
+    document.getElementById('grid').textContent = `${cols}×${rows}`;
+  }
+
+  const norm = v => { const l = Math.hypot(v[0], v[1], v[2]); return [v[0] / l, v[1] / l, v[2] / l]; };
+
+  function render(t) {
+    zbuf.fill(-1e9); lum.fill(0); kindBuf.fill(0);
+    const cy = Math.cos(angY), sy = Math.sin(angY), cx = Math.cos(angX), sx = Math.sin(angX);
+    const w = cols * cellW, h = rows * cellH;
+    const scale = Math.min(w * (w < 520 ? 0.36 : 0.30), h * 0.195);
+    const ox = w / 2, oy = h * 0.44, D = 5.0, yShift = -0.36;
+    const bob = 0.07 + 0.05 * Math.sin(t * 1.6);
+    const clamp01 = v => Math.max(0, Math.min(1, v));
+    const orbA = clamp01((build - T_ORB) / 1.4), glowA = clamp01((build - T_DIAM) / 1.6);
+    const gemY = (yA + yT) / 2 + yShift + bob, HUECO2 = 0.72 * 0.72;
+
+    // luces en espacio de vista: clave fija, borde que gira, destello
+    const key = norm([-0.45, 0.62, 0.75]);
+    const rim = norm([Math.cos(t * 0.5), 0.5, Math.sin(t * 0.5)]);
+    const spk = norm([0.6 * Math.cos(t * 1.7), 0.8, 0.5 + 0.4 * Math.sin(t * 1.3)]);
+
+    for (let i = 0; i < N; i++) {
+      const o = i * 7;
+      let x = P[o], y = P[o + 1] + yShift, z = P[o + 2];
+      let nx = P[o + 3], ny = P[o + 4], nz = P[o + 5];
+      const k = P[o + 6];
+      const age = build - REV[i];
+      if (age < 0) continue;
+      let fly = 0;
+      if (age < VUELO) { // la letra vuela hasta su sitio
+        const e = 1 - age / VUELO; fly = e;
+        const e3 = e * e * e;
+        x += OFF[i * 3] * e3; y += OFF[i * 3 + 1] * e3; z += OFF[i * 3 + 2] * e3;
+      }
+      if (k === 1) y += bob; // el diamante flota
+      // rotar en Y
+      let x1 = x * cy + z * sy, z1 = -x * sy + z * cy;
+      let nx1 = nx * cy + nz * sy, nz1 = -nx * sy + nz * cy;
+      // rotar en X
+      let y2 = y * cx - z1 * sx, z2 = y * sx + z1 * cx;
+      let ny2 = ny * cx - nz1 * sx, nz2 = ny * sx + nz1 * cx;
+      if (nz2 < -0.05 && k !== 1) continue; // cara trasera
+      const s = D / (D - z2);
+      const col = Math.floor((ox + x1 * s * scale) / cellW);
+      const row = Math.floor((oy - y2 * s * scale) / cellH);
+      if (col < 0 || row < 0 || col >= cols || row >= rows) continue;
+      const idx = row * cols + col;
+      if (z2 <= zbuf[idx]) continue;
+      zbuf[idx] = z2;
+      // sombreado
+      const ndk = Math.max(0, nx1 * key[0] + ny2 * key[1] + nz2 * key[2]);
+      const ndr = Math.max(0, nx1 * rim[0] + ny2 * rim[1] + nz2 * rim[2]);
+      const fres = Math.pow(1 - Math.min(1, Math.abs(nz2)), 3);
+      // reflexión del destello respecto a la vista (0,0,1)
+      const nds = nx1 * spk[0] + ny2 * spk[1] + nz2 * spk[2];
+      const rz = 2 * nds * nz2 - spk[2];
+      let L;
+      if (k === 1) {
+        const spec = Math.pow(Math.max(0, rz), 40);
+        L = 0.35 + 0.6 * ndk + 0.5 * ndr + 2.2 * spec + 0.5 * fres;
+        // dispersión interna: las facetas alternas brillan distinto
+        L *= 0.9 + 0.6 * Math.abs(Math.sin(nx1 * 9 + ny2 * 7 + t * 1.4));
+      } else {
+        const spec = Math.pow(Math.max(0, rz), 18);
+        L = 0.06 + 0.62 * ndk + 0.45 * ndr * fres * 2 + 0.9 * spec;
+        if (k === 4) L = 0.5 + L * 1.3; // garras: plata clara para que se vean
+      }
+      if (fly > 0) L = Math.max(L, 0.25 + 0.5 * fly);
+      lum[idx] = L; kindBuf[idx] = k + 1;
+    }
+
+    // órbitas
+    if (orbA > 0) for (const ob of orbits) {
+      const ct = Math.cos(ob.tilt), st = Math.sin(ob.tilt);
+      const a0 = ob.rot + t * 0.25;
+      for (let j = 0; j < 700; j++) {
+        const u = j / 700 * TAU;
+        let x = 1.9 * Math.cos(u), y = 0, z = 1.9 * Math.sin(u);
+        let y1 = y * ct - z * st, z1 = y * st + z * ct;
+        let x2 = x * Math.cos(a0) + z1 * Math.sin(a0), z2 = -x * Math.sin(a0) + z1 * Math.cos(a0);
+        let y3 = y1 * cx - z2 * sx + yShift, z3 = y1 * sx + z2 * cx;
+        // hueco alrededor del diamante: las órbitas no lo tocan
+        if (x2 * x2 + (y3 - gemY) * (y3 - gemY) < HUECO2) continue;
+        const s = D / (D - z3);
+        const col = Math.floor((ox + x2 * s * scale) / cellW);
+        const row = Math.floor((oy - y3 * s * scale) / cellH);
+        if (col < 0 || row < 0 || col >= cols || row >= rows) continue;
+        const idx = row * cols + col;
+        if (z3 <= zbuf[idx]) continue;
+        zbuf[idx] = z3; lum[idx] = (0.16 + 0.12 * (z3 + 1.9) / 3.8) * orbA; kindBuf[idx] = 3;
+      }
+    }
+
+    // corazón grande que gira detrás del anillo
+    if (orbA > 0) {
+      const ah = -t * 0.4, ca = Math.cos(ah), sa = Math.sin(ah);
+      for (let j = 0; j < 900; j++) {
+        const u = j / 900 * TAU, s3 = Math.sin(u);
+        const hx = 16 * s3 * s3 * s3 * 0.135;
+        const hy = (13 * Math.cos(u) - 5 * Math.cos(2 * u) - 2 * Math.cos(3 * u) - Math.cos(4 * u)) * 0.135 + 0.35;
+        const x2 = hx * ca, z1 = -hx * sa;
+        const y3 = hy * cx - z1 * sx, z3 = hy * sx + z1 * cx;
+        if (x2 * x2 + (y3 - gemY) * (y3 - gemY) < HUECO2) continue;
+        const s = D / (D - z3);
+        const col = Math.floor((ox + x2 * s * scale) / cellW);
+        const row = Math.floor((oy - y3 * s * scale) / cellH);
+        if (col < 0 || row < 0 || col >= cols || row >= rows) continue;
+        const idx = row * cols + col;
+        if (z3 <= zbuf[idx]) continue;
+        zbuf[idx] = z3; lum[idx] = (0.35 + 0.25 * (z3 + 2.2) / 4.4) * orbA; kindBuf[idx] = 4;
+      }
+    }
+
+    // destellos en el diamante
+    if (!paused && build > T_GARRA) {
+      const cand = [];
+      for (let i = 0; i < kindBuf.length; i++) if (kindBuf[i] === 2 && lum[i] > 0.6) cand.push(i);
+      const n = cand.length ? 1 + ((Math.random() * 3) | 0) : 0;
+      for (let q = 0; q < n; q++) sparks.push({ idx: cand[(Math.random() * cand.length) | 0], life: 1, big: Math.random() < 0.3 });
+    }
+
+    // dibujar
+    ctx.fillStyle = '#07080b';
+    ctx.fillRect(0, 0, cv.width / dpr, cv.height / dpr);
+    // resplandor detrás del diamante (late suave)
+    if (glowA > 0) {
+      ctx.globalAlpha = glowA;
+      const gy = yG + 0.08 + yShift + bob;
+      const gz = gy * sx, gys = gy * cx, s = D / (D - gz);
+      const offX0 = (cv.clientWidth - w) / 2, offY0 = (cv.clientHeight - h) / 2;
+      const gx = offX0 + ox, gyp = offY0 + oy - gys * s * scale;
+      const rad = scale * (0.75 + 0.12 * Math.sin(t * 2.2));
+      const gr = ctx.createRadialGradient(gx, gyp, 0, gx, gyp, rad);
+      gr.addColorStop(0, 'rgba(210,240,255,0.32)');
+      gr.addColorStop(0.35, 'rgba(120,200,255,0.13)');
+      gr.addColorStop(1, 'rgba(120,200,255,0)');
+      ctx.fillStyle = gr; ctx.fillRect(gx - rad, gyp - rad, rad * 2, rad * 2);
+      ctx.globalAlpha = 1;
+    }
+    ctx.textBaseline = 'top';
+    const offX = (cv.clientWidth - w) / 2, offY = (cv.clientHeight - h) / 2;
+    letras = 0;
+    for (let i = 0; i < lum.length; i++) {
+      const kb = kindBuf[i]; if (!kb) continue;
+      letras++;
+      const L = Math.min(1, lum[i]);
+      const ch = RAMP[Math.min(RAMP.length - 1, Math.max(1, Math.round(L * (RAMP.length - 1))))];
+      const c = i % cols, rw = (i / cols) | 0;
+      if (kb === 2) ctx.fillStyle = L > 0.9 ? '#f2fbff' : `rgba(${150 + 80 * L | 0},${215 + 30 * L | 0},255,${0.55 + 0.45 * L})`;
+      else if (kb === 3) ctx.fillStyle = `rgba(200,160,180,${L * 2})`;
+      else if (kb === 4) ctx.fillStyle = `rgba(255,143,177,${L})`;
+      else if (kb === 5) ctx.fillStyle = `rgba(${235 + 20 * L | 0},${238 + 17 * L | 0},245,${0.88 + 0.12 * L})`;
+      else ctx.fillStyle = `rgba(233,237,242,${0.25 + 0.75 * L})`;
+      if (kb === 2 && L > 0.75) { ctx.shadowColor = 'rgba(140,210,255,0.9)'; ctx.shadowBlur = 6; } else ctx.shadowBlur = 0;
+      ctx.fillText(kb === 3 ? '.' : kb === 4 ? (L > 0.5 ? ':' : '.') : ch, offX + c * cellW, offY + rw * cellH);
+    }
+    ctx.shadowBlur = 0;
+
+    // reflejo de espejo debajo del anillo
+    {
+      const piso = offY + oy + (R + r - yShift) * (D / (D + 0.1)) * scale + cellH * 0.6;
+      const alto = Math.min(piso - offY, cv.clientHeight - piso, scale * 1.4);
+      if (alto > 10) {
+        ctx.save();
+        ctx.globalAlpha = 0.28;
+        ctx.translate(0, piso * 2); ctx.scale(1, -1);
+        ctx.drawImage(cv, 0, (piso - alto) * dpr, cv.width, alto * dpr, 0, piso - alto, cv.clientWidth, alto);
+        ctx.restore();
+        const fade = ctx.createLinearGradient(0, piso, 0, piso + alto);
+        fade.addColorStop(0, 'rgba(7,8,11,0.15)');
+        fade.addColorStop(0.7, 'rgba(7,8,11,0.9)');
+        fade.addColorStop(1, 'rgba(7,8,11,1)');
+        ctx.fillStyle = fade; ctx.fillRect(0, piso, cv.clientWidth, alto + 1);
+        // línea fina del espejo
+        const lg = ctx.createLinearGradient(ox + offX - scale * 1.6, 0, ox + offX + scale * 1.6, 0);
+        lg.addColorStop(0, 'rgba(159,211,255,0)'); lg.addColorStop(0.5, 'rgba(159,211,255,0.35)'); lg.addColorStop(1, 'rgba(159,211,255,0)');
+        ctx.fillStyle = lg; ctx.fillRect(ox + offX - scale * 1.6, piso, scale * 3.2, 1);
+      }
+    }
+
+    // corazones que flotan
+    if (!reduce && build > T_FIN && Math.random() < 0.06) hearts.push(nuevoCorazon(Math.random() * cv.clientWidth, cv.clientHeight + 10, false));
+    hearts = hearts.filter(hh => hh.life > 0 && hh.y > -30);
+    for (const hh of hearts) {
+      hh.age += 1 / 60;
+      hh.x += hh.vx + Math.sin(hh.age * 2 + hh.ph) * 0.35;
+      hh.y += hh.vy; hh.vy *= hh.burst ? 0.985 : 1;
+      if (hh.burst) { hh.vy -= 0.02; hh.life -= 0.008; } else hh.life -= 0.002;
+      ctx.font = `${hh.size}px ${fontFam}`;
+      ctx.fillStyle = `rgba(255,${120 + hh.tone},${160 + hh.tone / 2},${Math.min(1, hh.life) * 0.85})`;
+      ctx.fillText(hh.g, hh.x, hh.y);
+    }
+    ctx.font = `${FONT_PX}px ${fontFam}`;
+    ctx.shadowBlur = 0;
+    sparks = sparks.filter(s => (s.life -= 0.045) > 0);
+    for (const s of sparks) {
+      const c = s.idx % cols, rw = (s.idx / cols) | 0;
+      const X = k => offX + (c + k) * cellW, Y = k => offY + (rw + k) * cellH;
+      ctx.fillStyle = `rgba(255,255,255,${s.life})`;
+      ctx.fillText(s.life > 0.6 ? '*' : '+', X(0), Y(0));
+      if (s.life > 0.35) {
+        const len = s.big ? 4 : 2;
+        for (let k = 1; k <= len; k++) {
+          const a = s.life * (1 - (k - 1) / (len + 1));
+          ctx.fillStyle = k % 2 ? `rgba(225,246,255,${a})` : `rgba(140,210,255,${a})`;
+          ctx.fillText('-', X(-k), Y(0)); ctx.fillText('-', X(k), Y(0));
+          ctx.fillText('|', X(0), Y(-k)); ctx.fillText('|', X(0), Y(k));
+          if (s.big && k <= 2) {
+            ctx.fillText('/', X(k), Y(-k)); ctx.fillText('/', X(-k), Y(k));
+            ctx.fillText('\\', X(-k), Y(-k)); ctx.fillText('\\', X(k), Y(k));
+          }
+        }
+      }
+    }
+  }
+
+  // ---------- bucle ----------
+  var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reduce) velY = 0.15;
+  let last = performance.now(), acc = 0, fpsN = 0, fpsT = 0, clock = 0;
+  const fpsEl = document.getElementById('fps'), frEl = document.getElementById('frame');
+  const hudEl = document.getElementById('estadoHud'), stage = document.querySelector('.stage');
+  const codEl = document.getElementById('codigo');
+
+  // el "código" que se escribe mientras se construye el anillo
+  const CODIGO = [
+    ['k', 'def '], ['f', 'banda'], ['', '():\n'],
+    ['', '    u, v = malla(520, 56)\n'],
+    ['', '    '], ['k', 'return '], ['f', 'toro'], ['', '(R=1.0, r=0.11, u, v)\n\n'],
+    ['k', 'def '], ['f', 'diamante'], ['', '():\n'],
+    ['', '    pabellon = cono(facetas=8)\n'],
+    ['', '    corona = tronco(facetas=16)\n'],
+    ['', '    '], ['k', 'return '], ['', 'pabellon + corona + mesa()\n\n'],
+    ['k', 'def '], ['f', 'garras'], ['', '():\n'],
+    ['', '    '], ['k', 'for '], ['', 'i '], ['k', 'in '], ['', 'range(4):\n'],
+    ['', '        cilindro(base[i], punta[i], r=0.07)\n\n'],
+    ['k', 'def '], ['f', 'orbitas'], ['', '(t):\n'],
+    ['', '    elipses(3, radio=1.9) + corazon(t)\n\n'],
+    ['f', 'render'], ['', '(banda() + diamante() + garras() + orbitas(t))\n'],
+  ];
+  const TOTAL = CODIGO.reduce((s, [, txt]) => s + txt.length, 0);
+  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  let ultimoN = -1;
+  function pintarCodigo() {
+    const n = Math.min(TOTAL, Math.floor(build / (T_FIN - 0.6) * TOTAL));
+    if (n === ultimoN) return; ultimoN = n;
+    let quedan = n, html = '';
+    for (const [cls, txt] of CODIGO) {
+      if (quedan <= 0) break;
+      const parte = txt.slice(0, quedan); quedan -= parte.length;
+      html += cls ? `<span class="${cls}">${esc(parte)}</span>` : esc(parte);
+    }
+    const lineas = html.split('\n');
+    const desde = Math.max(0, lineas.length - 6);
+    codEl.innerHTML = lineas.slice(desde).map((l, i) =>
+      `<span class="n">${desde + i + 1}</span>${l}${desde + i === lineas.length - 1 ? '<span class="cursor">▍</span>' : ''}`
+    ).join('\n');
+  }
+  function reiniciar() {
+    build = 0; ultimoN = -1; sparks = []; hearts = [];
+    stage.classList.remove('listo'); pararMensajes();
+  }
+  document.getElementById('repetir').addEventListener('click', reiniciar);
+  function loop(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (cv.clientWidth !== lastW || cv.clientHeight !== lastH) resize();
+    if (!paused) {
+      clock += dt;
+      if (build < T_FIN + 1) {
+        build += dt;
+        pintarCodigo();
+        const pct = Math.min(100, Math.round(build / T_FIN * 100));
+        hudEl.textContent = pct < 100 ? `construyendo ${pct}%` : `letras ${letras}`;
+        if (build >= T_FIN && !stage.classList.contains('listo')) { stage.classList.add('listo'); empezarMensajes(); }
+      } else if (frame % 15 === 0) hudEl.textContent = `letras ${letras}`;
+      if (!drag) angY += velY * dt;
+      angX = 0.18 + 0.08 * Math.sin(clock * 0.6);
+      frame++;
+    }
+    render(clock);
+    fpsN++; fpsT += dt;
+    if (fpsT > 0.5) { fpsEl.textContent = `${Math.round(fpsN / fpsT)} fps`; fpsN = 0; fpsT = 0; frEl.textContent = `frame ${frame}`; }
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- interacción ----------
+  let moved = false;
+  cv.addEventListener('pointerdown', e => { drag = { x: e.clientX, a: angY }; moved = false; cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x; if (Math.abs(dx) > 4) moved = true;
+    angY = drag.a + dx * 0.01;
+  });
+  cv.addEventListener('pointerup', e => {
+    if (!moved) {
+      const b = cv.getBoundingClientRect();
+      for (let i = 0; i < 26; i++) hearts.push(nuevoCorazon(e.clientX - b.left, e.clientY - b.top, true));
+    }
+    drag = null;
+  });
+
+  // ---------- mensajes bonitos (se escriben solos) ----------
+  const MENSAJES = [
+    'eres mi lugar favorito',
+    'brillas más que este diamante',
+    'contigo todo es más bonito',
+    'me haces sonreír sin darme cuenta',
+    'gracias por existir',
+    'eres mi persona favorita',
+    'si fueras una estrella, serías la que más brilla',
+    'todo es mejor a tu lado',
+    'te elegiría en todas las vidas',
+  ];
+  const msgEl = document.getElementById('msg');
+  let relojMsg = null;
+  function pararMensajes() { clearInterval(relojMsg); relojMsg = null; msgEl.textContent = ''; }
+  function empezarMensajes() {
+  pararMensajes();
+  if (reduce) { let k = 0; msgEl.textContent = MENSAJES[0]; relojMsg = setInterval(() => { k = (k + 1) % MENSAJES.length; msgEl.textContent = MENSAJES[k]; }, 5000); }
+  else {
+    let mi = 0, ci = 0, borrando = false, espera = 0;
+    relojMsg = setInterval(() => {
+      const m = MENSAJES[mi];
+      if (espera > 0) { espera--; return; }
+      if (!borrando) {
+        ci++; msgEl.textContent = m.slice(0, ci);
+        if (ci >= m.length) { borrando = true; espera = 38; }
+      } else {
+        ci -= 2; msgEl.textContent = m.slice(0, Math.max(0, ci));
+        if (ci <= 0) { borrando = false; ci = 0; mi = (mi + 1) % MENSAJES.length; espera = 6; }
+      }
+    }, 70);
+  }
+  }
+
+  // ---------- nombre (solo el nombre, sin "para"); viaja en el enlace como #nombre ----------
+  const inp = document.getElementById('nombre'), para = document.getElementById('para'), est = document.getElementById('estado');
+  const limpiar = s => s.replace(/[^A-Za-z0-9\- ]/g, '').slice(0, 24);
+  function mostrar(n) { para.textContent = n; }
+  function desdeHash() {
+    let n = ''; try { n = decodeURIComponent(location.hash.slice(1)).replace(/-/g, ' '); } catch (e) {}
+    n = limpiar(n).trim(); inp.value = n; mostrar(n);
+  }
+  // si la página se abre con un nombre en el enlace (la persona que lo recibe), se esconden la casilla y "Copiar enlace"
+  if (location.hash.length > 1) {
+    ['nombre', 'copiar', 'estado'].forEach(id => { document.getElementById(id).hidden = true; });
+    document.querySelector('label[for="nombre"]').hidden = true;
+    document.getElementById('form').style.justifyContent = 'center';
+  }
+  inp.addEventListener('input', () => {
+    const n = limpiar(inp.value); if (n !== inp.value) inp.value = n;
+    mostrar(n.trim());
+    const h = n.trim().replace(/ +/g, '-');
+    try { history.replaceState(null, '', h ? '#' + h : location.pathname + location.search); } catch (e) { location.hash = h; }
+  });
+  window.addEventListener('hashchange', desdeHash);
+  document.getElementById('form').addEventListener('submit', e => {
+    e.preventDefault();
+    const h = limpiar(inp.value).trim().replace(/ +/g, '-');
+    const url = location.href.split('#')[0] + (h ? '#' + h : '');
+    const ok = () => { est.textContent = 'Copiado'; setTimeout(() => est.textContent = '', 1800); };
+    const fallo = () => { est.textContent = url; };
+    try { navigator.clipboard.writeText(url).then(ok, fallo); } catch (err) { fallo(); }
+  });
+  desdeHash();
+
+  window.addEventListener('resize', resize);
+  const start = () => { resize(); requestAnimationFrame(t => { last = t; loop(t); }); };
+  (document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve()).then(start, start);
+})();
+</script>
